@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm parchment — the Catan table feeling */
+    --background: 40 65% 94%;
+    --foreground: 24 55% 12%;
+
+    --card: 38 50% 90%;
+    --card-foreground: 24 55% 12%;
+
+    --popover: 40 65% 96%;
+    --popover-foreground: 24 55% 12%;
+
+    /* Wood brown — primary action */
+    --primary: 22 52% 32%;
+    --primary-foreground: 40 65% 96%;
+
+    /* Sandy secondary */
+    --secondary: 36 45% 78%;
+    --secondary-foreground: 24 40% 18%;
+
+    /* Muted sand */
+    --muted: 38 35% 84%;
+    --muted-foreground: 25 25% 45%;
+
+    /* Wheat gold — accent */
+    --accent: 38 82% 50%;
+    --accent-foreground: 24 55% 12%;
+
+    /* Brick red — destructive */
+    --destructive: 10 68% 42%;
+    --destructive-foreground: 40 65% 96%;
+
+    --border: 34 30% 74%;
+    --input: 34 30% 74%;
+    --ring: 22 52% 32%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Hex pattern background for hero sections */
+.hex-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34L28 66zm0-2l26-15V18L28 2 2 18v31l26 15z' fill='%23c9a87c' fill-opacity='0.15'/%3E%3C/svg%3E");
+}

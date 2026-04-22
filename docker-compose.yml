@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: catan_tracker
+      POSTGRES_USER: catan
+      POSTGRES_PASSWORD: catan
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catan -d catan_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/catan_tracker
+      DB_USERNAME: catan
+      DB_PASSWORD: catan
+      JWT_SECRET: change-this-in-production-must-be-at-least-32-characters-long
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

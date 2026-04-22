@@ -1,0 +1,94 @@
+erDiagram
+    PLAYER {
+        uuid id PK
+        string name
+        string email
+        string avatar_url
+        int elo_rating
+        date created_at
+    }
+
+    LOCATION {
+        uuid id PK
+        uuid owner_id FK
+        string name
+        string address
+    }
+
+    EXPANSION {
+        uuid id PK
+        string name
+    }
+
+    DAILY_MAP {
+        uuid id PK
+        date map_date
+        json tile_config
+        json number_config
+        json port_config
+        string seed
+    }
+
+    MATCH {
+        uuid id PK
+        uuid location_id FK
+        uuid expansion_id FK
+        uuid daily_map_id FK
+        date played_at
+        int duration_minutes
+        string deck_layout
+        string notes
+    }
+
+    MATCH_PLAYER {
+        uuid id PK
+        uuid match_id FK
+        uuid player_id FK
+        string color
+        int points
+        boolean winner
+        boolean longest_road
+        boolean largest_army
+        int elo_before
+        int elo_after
+    }
+
+    RATING_HISTORY {
+        uuid id PK
+        uuid player_id FK
+        uuid match_id FK
+        int elo_before
+        int elo_after
+        int delta
+        date recorded_at
+    }
+
+    ACHIEVEMENT {
+        uuid id PK
+        string name
+        string description
+        string icon_name
+        string category
+        string criteria_type
+        string criteria_value
+    }
+
+    PLAYER_ACHIEVEMENT {
+        uuid id PK
+        uuid player_id FK
+        uuid achievement_id FK
+        uuid match_id FK
+        date unlocked_at
+    }
+
+    PLAYER ||--o{ LOCATION : "owns"
+    PLAYER ||--|{ MATCH_PLAYER : "participates in"
+    PLAYER ||--o{ RATING_HISTORY : "has"
+    PLAYER ||--o{ PLAYER_ACHIEVEMENT : "earns"
+    LOCATION ||--o{ MATCH : "hosted at"
+    EXPANSION ||--o{ MATCH : "used in"
+    DAILY_MAP ||--o{ MATCH : "played with"
+    MATCH ||--|{ MATCH_PLAYER : "has"
+    MATCH ||--o{ RATING_HISTORY : "triggers"
+    ACHIEVEMENT ||--o{ PLAYER_ACHIEVEMENT : "awarded via"
+    MATCH_PLAYER ||--o{ PLAYER_ACHIEVEMENT : "unlocks"

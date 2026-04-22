@@ -1,0 +1,501 @@
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Loader2, PlusCircle, Trash2, Crown } from "lucide-react";
+import { format } from "date-fns";
+import api from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import type { Expansion, Location, Player, Match } from "@/types/api";
+
+const CATAN_COLORS = [
+  { value: "red", label: "Red", hex: "#ef4444" },
+  { value: "blue", label: "Blue", hex: "#3b82f6" },
+  { value: "white", label: "White", hex: "#f3f4f6" },
+  { value: "orange", label: "Orange", hex: "#f97316" },
+  { value: "green", label: "Green", hex: "#16a34a" },
+  { value: "brown", label: "Brown", hex: "#92400e" },
+];
+
+const playerSchema = z.object({
+  playerId: z.string().min(1, "Select a player"),
+  color: z.string().min(1, "Select a color"),
+  points: z.coerce.number().min(0).max(20),
+  winner: z.boolean(),
+  longestRoad: z.boolean(),
+  largestArmy: z.boolean(),
+});
+
+const schema = z.object({
+  locationId: z.string().min(1, "Select a location"),
+  expansionId: z.string().min(1, "Select an expansion"),
+  playedAt: z.string().min(1, "Select date and time"),
+  durationMinutes: z.coerce.number().min(0).optional(),
+  deckLayout: z.enum(["single", "double"]),
+  notes: z.string().optional(),
+  players: z
+    .array(playerSchema)
+    .min(2, "At least 2 players required")
+    .max(6, "Maximum 6 players")
+    .refine((ps) => ps.filter((p) => p.winner).length === 1, {
+      message: "Exactly one player must be marked as winner",
+    }),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+export function LogMatchPage() {
+  const navigate = useNavigate();
+
+  const { data: locations } = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => api.get<Location[]>("/locations").then((r) => r.data),
+  });
+
+  const { data: expansions } = useQuery({
+    queryKey: ["expansions"],
+    queryFn: () => api.get<Expansion[]>("/expansions").then((r) => r.data),
+  });
+
+  const { data: players } = useQuery({
+    queryKey: ["players"],
+    queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
+  });
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      locationId: "",
+      expansionId: "",
+      playedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      deckLayout: "single",
+      notes: "",
+      players: [
+        { playerId: "", color: "red", points: 0, winner: false, longestRoad: false, largestArmy: false },
+        { playerId: "", color: "blue", points: 0, winner: false, longestRoad: false, largestArmy: false },
+      ],
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "players" });
+
+  const mutation = useMutation({
+    mutationFn: (data: FormValues) =>
+      api.post<Match>("/matches", {
+        ...data,
+        playedAt: new Date(data.playedAt).toISOString().replace("Z", ""),
+        durationMinutes: data.durationMinutes || undefined,
+        notes: data.notes || undefined,
+      }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      toast.success("Match logged! ELO updated.");
+      navigate("/");
+    },
+    onError: (error: unknown) => {
+      const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg ?? "Failed to log match");
+    },
+  });
+
+  function setWinner(index: number) {
+    fields.forEach((_, i) => form.setValue(`players.${i}.winner`, i === index));
+  }
+
+  function setExclusive(field: "longestRoad" | "largestArmy", index: number, value: boolean) {
+    if (value) {
+      fields.forEach((_, i) => form.setValue(`players.${i}.${field}`, i === index));
+    } else {
+      form.setValue(`players.${index}.${field}`, false);
+    }
+  }
+
+  const watchedPlayers = form.watch("players");
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-primary">Log a Match</h1>
+        <p className="text-muted-foreground text-sm mt-1">Record the results and update everyone's ELO</p>
+      </div>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
+          {/* Match Info */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Match info</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="locationId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Where was it played?" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {locations?.map((l) => (
+                            <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="expansionId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Expansion</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Which expansion?" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {expansions?.map((e) => (
+                            <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="playedAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date & time</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="durationMinutes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Duration (min) <span className="text-muted-foreground font-normal">— optional</span></FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="e.g. 90" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="deckLayout"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Board layout</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="single">Single board (3–4 players)</SelectItem>
+                          <SelectItem value="double">Double board (5–6 players)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">— optional</span></FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Anything memorable about this game?" rows={2} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Players */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Players</CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    append({
+                      playerId: "",
+                      color: CATAN_COLORS[fields.length % CATAN_COLORS.length].value,
+                      points: 0,
+                      winner: false,
+                      longestRoad: false,
+                      largestArmy: false,
+                    })
+                  }
+                  disabled={fields.length >= 6}
+                >
+                  <PlusCircle className="mr-1.5 h-4 w-4" />
+                  Add player
+                </Button>
+              </div>
+              {form.formState.errors.players?.root && (
+                <p className="text-sm text-destructive">{form.formState.errors.players.root.message}</p>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {fields.map((field, index) => (
+                <PlayerRow
+                  key={field.id}
+                  index={index}
+                  form={form}
+                  players={players ?? []}
+                  onRemove={() => remove(index)}
+                  canRemove={fields.length > 2}
+                  isWinner={watchedPlayers[index]?.winner ?? false}
+                  onSetWinner={() => setWinner(index)}
+                  onSetExclusive={(f, v) => setExclusive(f, index, v)}
+                  takenColors={watchedPlayers
+                    .filter((_, i) => i !== index)
+                    .map((p) => p.color)}
+                  takenPlayers={watchedPlayers
+                    .filter((_, i) => i !== index)
+                    .map((p) => p.playerId)}
+                />
+              ))}
+            </CardContent>
+          </Card>
+
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save match & update ELO
+          </Button>
+        </form>
+      </Form>
+    </div>
+  );
+}
+
+function PlayerRow({
+  index,
+  form,
+  players,
+  onRemove,
+  canRemove,
+  isWinner,
+  onSetWinner,
+  onSetExclusive,
+  takenColors,
+  takenPlayers,
+}: {
+  index: number;
+  form: ReturnType<typeof useForm<FormValues>>;
+  players: Player[];
+  onRemove: () => void;
+  canRemove: boolean;
+  isWinner: boolean;
+  onSetWinner: () => void;
+  onSetExclusive: (field: "longestRoad" | "largestArmy", value: boolean) => void;
+  takenColors: string[];
+  takenPlayers: string[];
+}) {
+  return (
+    <div
+      className={`rounded-lg border p-3 space-y-3 transition-colors ${
+        isWinner ? "border-accent bg-accent/10" : "bg-background"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-muted-foreground">Player {index + 1}</span>
+        <div className="flex items-center gap-2">
+          {isWinner && (
+            <Badge variant="accent" className="text-xs gap-1">
+              <Crown className="h-3 w-3" /> Winner
+            </Badge>
+          )}
+          {canRemove && (
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove}>
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Player select */}
+        <FormField
+          control={form.control}
+          name={`players.${index}.playerId`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">Player</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select player" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {players.map((p) => (
+                    <SelectItem
+                      key={p.id}
+                      value={p.id}
+                      disabled={takenPlayers.includes(p.id)}
+                    >
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Color select */}
+        <FormField
+          control={form.control}
+          name={`players.${index}.color`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">Color</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CATAN_COLORS.map((c) => (
+                    <SelectItem key={c.value} value={c.value} disabled={takenColors.includes(c.value)}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="h-3 w-3 rounded-full border border-border inline-block"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                        {c.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="flex items-center gap-4 flex-wrap">
+        {/* Points */}
+        <FormField
+          control={form.control}
+          name={`players.${index}.points`}
+          render={({ field }) => (
+            <FormItem className="flex-1 min-w-[80px]">
+              <FormLabel className="text-xs">Points</FormLabel>
+              <FormControl>
+                <Input type="number" min={0} max={20} className="h-9 text-sm" {...field} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {/* Checkboxes */}
+        <div className="flex items-center gap-4 pt-5 flex-wrap">
+          <button
+            type="button"
+            onClick={onSetWinner}
+            className={`flex items-center gap-1.5 text-sm rounded-md px-2 py-1 transition-colors ${
+              isWinner
+                ? "bg-accent text-accent-foreground font-medium"
+                : "hover:bg-muted text-muted-foreground"
+            }`}
+          >
+            <Crown className="h-3.5 w-3.5" />
+            Winner
+          </button>
+
+          <FormField
+            control={form.control}
+            name={`players.${index}.longestRoad`}
+            render={({ field }) => (
+              <FormItem className="flex items-center gap-1.5 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) => onSetExclusive("longestRoad", !!checked)}
+                  />
+                </FormControl>
+                <FormLabel className="text-xs font-normal cursor-pointer">Longest Road</FormLabel>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name={`players.${index}.largestArmy`}
+            render={({ field }) => (
+              <FormItem className="flex items-center gap-1.5 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) => onSetExclusive("largestArmy", !!checked)}
+                  />
+                </FormControl>
+                <FormLabel className="text-xs font-normal cursor-pointer">Largest Army</FormLabel>
+              </FormItem>
+            )}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

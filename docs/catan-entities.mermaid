@@ -1,0 +1,46 @@
+erDiagram
+    PLAYER {
+        uuid id PK
+        string name
+        string email
+        string avatar_url
+        date created_at
+    }
+
+    LOCATION {
+        uuid id PK
+        uuid owner_id FK
+        string name
+        string address
+    }
+
+    EXPANSION {
+        uuid id PK
+        string name
+    }
+
+    MATCH {
+        uuid id PK
+        uuid location_id FK
+        uuid expansion_id FK
+        date played_at
+        int duration_minutes
+        string deck_layout
+    }
+
+    MATCH_PLAYER {
+        uuid id PK
+        uuid match_id FK
+        uuid player_id FK
+        string color
+        int points
+        boolean winner
+        boolean longest_road
+        boolean largest_army
+    }
+
+    PLAYER ||--o{ LOCATION : "owns"
+    LOCATION ||--o{ MATCH : "hosted at"
+    EXPANSION ||--o{ MATCH : "used in"
+    MATCH ||--|{ MATCH_PLAYER : "has"
+    PLAYER ||--|{ MATCH_PLAYER : "participates in"
