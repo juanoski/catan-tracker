@@ -40,7 +40,8 @@ public class LocationService {
     }
 
     @Transactional
-    public LocationResponse create(UUID ownerId, LocationRequest req) {
+    public LocationResponse create(UUID requesterId, LocationRequest req) {
+        UUID ownerId = req.ownerId() != null ? req.ownerId() : requesterId;
         Player owner = playerService.getEntityById(ownerId);
         Location location = Location.builder()
                 .owner(owner)
@@ -55,6 +56,9 @@ public class LocationService {
         Location location = getEntityById(id);
         if (!location.getOwner().getId().equals(requesterId)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only the owner can update this location");
+        }
+        if (req.ownerId() != null) {
+            location.setOwner(playerService.getEntityById(req.ownerId()));
         }
         location.setName(req.name());
         location.setAddress(req.address());

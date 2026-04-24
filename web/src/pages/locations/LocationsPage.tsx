@@ -28,9 +28,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import type { Location } from "@/types/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { Location, Player } from "@/types/api";
 
 const schema = z.object({
+  ownerId: z.string().min(1, "Select an owner"),
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
   address: z.string().optional(),
 });
@@ -45,6 +47,11 @@ export function LocationsPage() {
   const { data: locations, isPending } = useQuery({
     queryKey: ["locations"],
     queryFn: () => api.get<Location[]>("/locations").then((r) => r.data),
+  });
+
+  const { data: players = [] } = useQuery({
+    queryKey: ["players"],
+    queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
 
   const deleteMutation = useMutation({
@@ -159,6 +166,8 @@ export function LocationsPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         title="Add location"
+        players={players}
+        defaultOwnerId={user?.playerId ?? ""}
         onSaved={() => setCreateOpen(false)}
       />
 
@@ -167,6 +176,8 @@ export function LocationsPage() {
         onOpenChange={(open) => { if (!open) setEditTarget(null); }}
         title="Edit location"
         location={editTarget ?? undefined}
+        players={players}
+        defaultOwnerId={user?.playerId ?? ""}
         onSaved={() => setEditTarget(null)}
       />
     </div>
@@ -178,17 +189,22 @@ function LocationDialog({
   onOpenChange,
   title,
   location,
+  players,
+  defaultOwnerId,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   location?: Location;
+  players: Player[];
+  defaultOwnerId: string;
   onSaved: () => void;
 }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     values: {
+      ownerId: location?.ownerId ?? defaultOwnerId,
       name: location?.name ?? "",
       address: location?.address ?? "",
     },
@@ -216,6 +232,30 @@ function LocationDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="ownerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Owner</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a player" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {players.map((player) => (
+                        <SelectItem key={player.id} value={player.id}>
+                          {player.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="name"
