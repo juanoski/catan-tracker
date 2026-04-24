@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X } from "lucide-react";
+import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -44,18 +44,26 @@ export function Navbar() {
           <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
             <Link to="/locations"><MapPin className="mr-1.5 h-4 w-4" />Locations</Link>
           </Button>
+          {isAdmin && (
+            <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
+              <Link to="/admin/users"><Users className="mr-1.5 h-4 w-4" />Users</Link>
+            </Button>
+          )}
         </nav>
 
         {/* Desktop user */}
         <div className="hidden md:flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-accent text-accent-foreground text-xs font-bold">
+            <AvatarFallback className="bg-accent text-accent-foreground text-xs font-bold">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <span className="text-sm font-medium">{user?.name}</span>
-            <Badge variant="accent" className="text-xs">ELO</Badge>
+            <Badge variant="accent" className="text-xs flex items-center gap-1">
+              {isAdmin && <Shield className="h-3 w-3" />}
+              {user?.role}
+            </Badge>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-primary-foreground hover:bg-primary/80">
             <LogOut className="h-4 w-4" />
@@ -76,7 +84,7 @@ export function Navbar() {
       <div
         className={cn(
           "md:hidden border-t border-primary/30 overflow-hidden transition-all duration-200",
-          menuOpen ? "max-h-64" : "max-h-0"
+          menuOpen ? "max-h-80" : "max-h-0"
         )}
       >
         <div className="container mx-auto flex flex-col px-4 py-3 gap-1">
@@ -101,6 +109,15 @@ export function Navbar() {
           >
             <MapPin className="h-4 w-4" /> Locations
           </Link>
+          {isAdmin && (
+            <Link
+              to="/admin/users"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
+            >
+              <Users className="h-4 w-4" /> Users
+            </Link>
+          )}
           <div className="flex items-center justify-between rounded-md px-3 py-2">
             <div className="flex items-center gap-2 text-sm">
               <Avatar className="h-7 w-7">

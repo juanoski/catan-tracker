@@ -27,6 +27,11 @@ public class Player {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private PlayerRole role = PlayerRole.PLAYER;
+
     @Column(name = "elo_rating", nullable = false)
     @Builder.Default
     private int eloRating = 1000;

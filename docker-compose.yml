@@ -24,6 +24,9 @@ services:
       DB_USERNAME: catan
       DB_PASSWORD: catan
       JWT_SECRET: change-this-in-production-must-be-at-least-32-characters-long
+      ADMIN_NAME: Admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: change-this-admin-password
     depends_on:
       postgres:
         condition: service_healthy

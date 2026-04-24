@@ -1,8 +1,11 @@
+export type PlayerRole = "ADMIN" | "PLAYER";
+
 export interface AuthResponse {
   token: string;
   playerId: string;
   name: string;
   email: string;
+  role: PlayerRole;
 }
 
 export interface Player {
@@ -10,6 +13,7 @@ export interface Player {
   name: string;
   email: string;
   avatarUrl: string | null;
+  role: PlayerRole;
   eloRating: number;
   createdAt: string;
 }
@@ -112,6 +116,22 @@ export interface HeadToHead {
   opponentName: string;
   wins: number;
   losses: number;
+}
+
+export interface AdminCreatePlayerRequest {
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  password: string;
+  role: PlayerRole;
+}
+
+export interface AdminUpdatePlayerRequest {
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+  password?: string;
+  role?: PlayerRole;
 }
 
 export interface CreateMatchRequest {

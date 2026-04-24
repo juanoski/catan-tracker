@@ -5,6 +5,7 @@ import com.catantracker.api.auth.dto.LoginRequest;
 import com.catantracker.api.auth.dto.RegisterRequest;
 import com.catantracker.api.exception.ApiException;
 import com.catantracker.api.player.Player;
+import com.catantracker.api.player.PlayerRole;
 import com.catantracker.api.player.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -32,10 +33,11 @@ public class AuthService {
                 .name(req.name())
                 .email(req.email())
                 .passwordHash(passwordEncoder.encode(req.password()))
+                .role(PlayerRole.PLAYER)
                 .build();
         playerRepository.save(player);
         String token = jwtService.generateToken(player.getId(), player.getEmail());
-        return new AuthResponse(token, player.getId(), player.getName(), player.getEmail());
+        return new AuthResponse(token, player.getId(), player.getName(), player.getEmail(), player.getRole());
     }
 
     public AuthResponse login(LoginRequest req) {
@@ -44,6 +46,6 @@ public class AuthService {
         Player player = playerRepository.findByEmail(req.email())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
         String token = jwtService.generateToken(player.getId(), player.getEmail());
-        return new AuthResponse(token, player.getId(), player.getName(), player.getEmail());
+        return new AuthResponse(token, player.getId(), player.getName(), player.getEmail(), player.getRole());
     }
 }

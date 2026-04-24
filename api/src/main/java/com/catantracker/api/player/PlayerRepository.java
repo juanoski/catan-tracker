@@ -8,4 +8,6 @@ import java.util.UUID;
 public interface PlayerRepository extends JpaRepository<Player, UUID> {
     Optional<Player> findByEmail(String email);
     boolean existsByEmail(String email);
+    boolean existsByEmailAndIdNot(String email, UUID id);
+    long countByRole(PlayerRole role);
 }
