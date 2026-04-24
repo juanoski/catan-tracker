@@ -32,14 +32,10 @@ public class AdminBootstrap {
     @Bean
     public ApplicationRunner bootstrapAdminRunner() {
         return args -> {
-            if (playerRepository.countByRole(PlayerRole.ADMIN) > 0) {
-                return;
-            }
-
             if (!StringUtils.hasText(adminName) ||
                 !StringUtils.hasText(adminEmail) ||
                 !StringUtils.hasText(adminPassword)) {
-                log.warn("No admin account exists and ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD were not fully provided.");
+                log.warn("ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD were not fully provided, so admin bootstrap was skipped.");
                 return;
             }
 
@@ -60,7 +56,7 @@ public class AdminBootstrap {
                             .build());
 
             playerRepository.save(admin);
-            log.info("Bootstrapped initial admin account for {}", admin.getEmail());
+            log.info("Ensured admin account for {}", admin.getEmail());
         };
     }
 }
