@@ -52,12 +52,14 @@ export function DashboardPage() {
             <div className="flex items-center gap-3 mt-2 flex-wrap">
               {myEntry ? (
                 <>
-                  <Badge variant="accent" className="text-sm px-3 py-1 font-bold">
-                    {myEntry.eloRating} ELO
-                  </Badge>
-                  <span className="text-primary-foreground/80 text-sm">
+                  <Link to={`/players/${myEntry.playerId}`} className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                    <Badge variant="accent" className="text-sm px-3 py-1 font-bold">
+                      {myEntry.eloRating} ELO
+                    </Badge>
+                  </Link>
+                  <Link to={`/players/${myEntry.playerId}`} className="text-primary-foreground/80 text-sm hover:underline">
                     #{myEntry.rank} ranked / {myEntry.wins}W / {myEntry.matchesPlayed - myEntry.wins}L
-                  </span>
+                  </Link>
                 </>
               ) : (
                 <span className="text-primary-foreground/60 text-sm">No matches yet - start logging!</span>
@@ -171,10 +173,15 @@ export function DashboardPage() {
         {/* Recent matches */}
         <Card className="lg:col-span-3">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Swords className="h-4 w-4 text-accent" />
-              Recent Matches
-            </CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Swords className="h-4 w-4 text-accent" />
+                Recent Matches
+              </CardTitle>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/matches">View all</Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3 p-3 pt-0">
             {loadingMatches
@@ -413,7 +420,9 @@ function PlayerChip({
       }`}
     >
       <span className={`h-2 w-2 rounded-full ${colorClass} shrink-0`} />
-      <span className="truncate max-w-[80px]">{player.playerName}</span>
+      <Link to={`/players/${player.playerId}`} className="truncate max-w-[80px] hover:underline">
+        {player.playerName}
+      </Link>
       <span
         className={`flex items-center gap-0.5 ${
           delta > 0 ? "text-green-600" : delta < 0 ? "text-destructive" : "text-muted-foreground"

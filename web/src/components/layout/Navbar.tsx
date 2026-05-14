@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X, Shield, Users, Swords } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 export function Navbar() {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
   function handleLogout() {
@@ -24,6 +25,14 @@ export function Navbar() {
     .toUpperCase()
     .slice(0, 2);
 
+  const navItems = [
+    { to: "/", label: "Dashboard", icon: LayoutDashboard, active: location.pathname === "/" },
+    { to: "/matches", label: "Matches", icon: Swords, active: location.pathname === "/matches" },
+    { to: "/matches/new", label: "Log Match", icon: PlusCircle, active: location.pathname === "/matches/new" },
+    { to: "/locations", label: "Locations", icon: MapPin, active: location.pathname === "/locations" },
+    ...(isAdmin ? [{ to: "/admin/users", label: "Users", icon: Users, active: location.pathname === "/admin/users" }] : []),
+  ];
+
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-primary text-primary-foreground shadow-md">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
@@ -35,23 +44,23 @@ export function Navbar() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
-            <Link to="/"><LayoutDashboard className="mr-1.5 h-4 w-4" />Dashboard</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
-            <Link to="/matches"><Swords className="mr-1.5 h-4 w-4" />Matches</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
-            <Link to="/matches/new"><PlusCircle className="mr-1.5 h-4 w-4" />Log Match</Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
-            <Link to="/locations"><MapPin className="mr-1.5 h-4 w-4" />Locations</Link>
-          </Button>
-          {isAdmin && (
-            <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
-              <Link to="/admin/users"><Users className="mr-1.5 h-4 w-4" />Users</Link>
+          {navItems.map((item) => (
+            <Button
+              key={item.to}
+              variant="ghost"
+              size="sm"
+              asChild
+              className={cn(
+                "text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground",
+                item.active && "bg-primary/70 text-primary-foreground ring-1 ring-primary-foreground/20"
+              )}
+            >
+              <Link to={item.to}>
+                <item.icon className="mr-1.5 h-4 w-4" />
+                {item.label}
+              </Link>
             </Button>
-          )}
+          ))}
         </nav>
 
         {/* Desktop user */}
@@ -91,43 +100,19 @@ export function Navbar() {
         )}
       >
         <div className="container mx-auto flex flex-col px-4 py-3 gap-1">
-          <Link
-            to="/"
-            onClick={() => setMenuOpen(false)}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
-          >
-            <LayoutDashboard className="h-4 w-4" /> Dashboard
-          </Link>
-          <Link
-            to="/matches"
-            onClick={() => setMenuOpen(false)}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
-          >
-            <Swords className="h-4 w-4" /> Matches
-          </Link>
-          <Link
-            to="/matches/new"
-            onClick={() => setMenuOpen(false)}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
-          >
-            <PlusCircle className="h-4 w-4" /> Log Match
-          </Link>
-          <Link
-            to="/locations"
-            onClick={() => setMenuOpen(false)}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
-          >
-            <MapPin className="h-4 w-4" /> Locations
-          </Link>
-          {isAdmin && (
+          {navItems.map((item) => (
             <Link
-              to="/admin/users"
+              key={item.to}
+              to={item.to}
               onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
+              className={cn(
+                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80",
+                item.active && "bg-primary/75"
+              )}
             >
-              <Users className="h-4 w-4" /> Users
+              <item.icon className="h-4 w-4" /> {item.label}
             </Link>
-          )}
+          ))}
           <div className="flex items-center justify-between rounded-md px-3 py-2">
             <div className="flex items-center gap-2 text-sm">
               <Avatar className="h-7 w-7">
