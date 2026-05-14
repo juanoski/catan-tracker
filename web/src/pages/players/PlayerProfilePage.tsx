@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import {
   ArrowLeft,
@@ -47,6 +47,7 @@ type ChartRow = { label: string; value: number; display?: string; color?: string
 
 export function PlayerProfilePage() {
   const { playerId = "" } = useParams();
+  const navigate = useNavigate();
 
   const { data: player, isPending: loadingPlayer } = useQuery({
     queryKey: ["players", playerId],
@@ -86,6 +87,14 @@ export function PlayerProfilePage() {
   const playerName = stats?.playerName ?? player?.name ?? "Player";
   const initials = getInitials(playerName);
 
+  function goBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/matches");
+    }
+  }
+
   if (loadingPlayer || loadingStats) {
     return (
       <div className="space-y-6">
@@ -111,11 +120,9 @@ export function PlayerProfilePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/matches">
-            <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Matches
-          </Link>
+        <Button variant="outline" size="sm" onClick={goBack}>
+          <ArrowLeft className="mr-1.5 h-4 w-4" />
+          Back
         </Button>
       </div>
 
