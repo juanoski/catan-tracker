@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  BarChart3,
   CalendarDays,
   Clock3,
   Crown,
@@ -40,6 +41,17 @@ const CATAN_COLORS: Record<string, string> = {
   purple: "bg-purple-600",
 };
 
+const CATAN_COLOR_HEX: Record<string, string> = {
+  red: "#ef4444",
+  blue: "#3b82f6",
+  white: "#f3f4f6",
+  orange: "#f97316",
+  green: "#16a34a",
+  brown: "#92400e",
+  yellow: "#facc15",
+  purple: "#9333ea",
+};
+
 const DEFAULT_FILTERS = {
   expansionId: "all",
   playerId: "all",
@@ -50,6 +62,7 @@ const DEFAULT_FILTERS = {
 };
 
 type MatchFilters = typeof DEFAULT_FILTERS;
+type ChartRow = { label: string; value: number; display?: string; color?: string };
 
 export function MatchesPage() {
   const { user } = useAuth();
@@ -94,6 +107,7 @@ export function MatchesPage() {
   const matches = matchPage?.content ?? [];
   const filteredMatches = useMemo(() => filterMatches(matches, filters), [matches, filters]);
   const summary = useMemo(() => buildSummary(filteredMatches), [filteredMatches]);
+  const chartData = useMemo(() => buildChartData(filteredMatches), [filteredMatches]);
   const dateFilterInvalid = Boolean(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
 
   function updateFilter<K extends keyof MatchFilters>(key: K, value: MatchFilters[K]) {
@@ -205,6 +219,33 @@ export function MatchesPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
+            <BarChart3 className="h-4 w-4 text-accent" />
+            Charts
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingMatches ? (
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-64 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              <HorizontalBarChart title="Wins by player" rows={chartData.winsByPlayer} emptyText="No wins in this filter set." />
+              <HorizontalBarChart title="Win rate by player" rows={chartData.winRateByPlayer} suffix="%" emptyText="No player results yet." />
+              <HorizontalBarChart title="Matches by location" rows={chartData.matchesByLocation} emptyText="No locations in this filter set." />
+              <HorizontalBarChart title="Average points" rows={chartData.averagePointsByPlayer} emptyText="No player scores yet." />
+              <HorizontalBarChart title="Wins by color" rows={chartData.winsByColor} emptyText="No color wins yet." />
+              <HorizontalBarChart title="Average duration" rows={chartData.averageDurationByExpansion} suffix=" min" emptyText="No timed matches yet." />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
             <CalendarDays className="h-4 w-4 text-accent" />
             Match history
           </CardTitle>
@@ -279,6 +320,103 @@ function buildSummary(matches: Match[]) {
   };
 }
 
+function buildChartData(matches: Match[]) {
+  const playerStats = new Map<string, { name: string; games: number; wins: number; points: number }>();
+  const locationCounts = new Map<string, { label: string; value: number }>();
+  const colorWins = new Map<string, { label: string; value: number; color: string }>();
+  const expansionDurations = new Map<string, { label: string; total: number; count: number }>();
+
+  matches.forEach((match) => {
+    const location = locationCounts.get(match.locationId) ?? { label: match.locationName, value: 0 };
+    locationCounts.set(match.locationId, { ...location, value: location.value + 1 });
+
+    if (match.durationMinutes && match.durationMinutes > 0) {
+      const expansion = expansionDurations.get(match.expansionId) ?? {
+        label: match.expansionName,
+        total: 0,
+        count: 0,
+      };
+      expansionDurations.set(match.expansionId, {
+        ...expansion,
+        total: expansion.total + match.durationMinutes,
+        count: expansion.count + 1,
+      });
+    }
+
+    match.players.forEach((player) => {
+      const current = playerStats.get(player.playerId) ?? {
+        name: player.playerName,
+        games: 0,
+        wins: 0,
+        points: 0,
+      };
+      playerStats.set(player.playerId, {
+        ...current,
+        games: current.games + 1,
+        wins: current.wins + (player.winner ? 1 : 0),
+        points: current.points + player.points,
+      });
+
+      if (player.winner) {
+        const colorKey = player.color.toLowerCase();
+        const color = colorWins.get(colorKey) ?? {
+          label: formatColorName(player.color),
+          value: 0,
+          color: CATAN_COLOR_HEX[colorKey] ?? "#94a3b8",
+        };
+        colorWins.set(colorKey, { ...color, value: color.value + 1 });
+      }
+    });
+  });
+
+  const players = [...playerStats.values()];
+
+  return {
+    winsByPlayer: players
+      .map((player) => ({ label: player.name, value: player.wins }))
+      .filter((row) => row.value > 0)
+      .sort(sortRows)
+      .slice(0, 8),
+    winRateByPlayer: players
+      .filter((player) => player.games > 0)
+      .map((player) => ({
+        label: player.name,
+        value: Math.round((player.wins / player.games) * 100),
+        display: `${Math.round((player.wins / player.games) * 100)}% (${player.wins}/${player.games})`,
+      }))
+      .sort(sortRows)
+      .slice(0, 8),
+    matchesByLocation: [...locationCounts.values()].sort(sortRows).slice(0, 8),
+    averagePointsByPlayer: players
+      .filter((player) => player.games > 0)
+      .map((player) => ({
+        label: player.name,
+        value: Number((player.points / player.games).toFixed(1)),
+        display: (player.points / player.games).toFixed(1),
+      }))
+      .sort(sortRows)
+      .slice(0, 8),
+    winsByColor: [...colorWins.values()].sort(sortRows).slice(0, 8),
+    averageDurationByExpansion: [...expansionDurations.values()]
+      .map((expansion) => ({
+        label: expansion.label,
+        value: Math.round(expansion.total / expansion.count),
+        display: `${Math.round(expansion.total / expansion.count)} min`,
+      }))
+      .sort(sortRows)
+      .slice(0, 8),
+  };
+}
+
+function sortRows(a: { label: string; value: number }, b: { label: string; value: number }) {
+  return b.value - a.value || a.label.localeCompare(b.label);
+}
+
+function formatColorName(color: string) {
+  const trimmed = color.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase() : "Unknown";
+}
+
 function FilterSelect({
   label,
   value,
@@ -308,6 +446,55 @@ function FilterSelect({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+function HorizontalBarChart({
+  title,
+  rows,
+  suffix = "",
+  emptyText,
+}: {
+  title: string;
+  rows: ChartRow[];
+  suffix?: string;
+  emptyText: string;
+}) {
+  const max = Math.max(...rows.map((row) => row.value), 1);
+
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <Badge variant="secondary" className="text-xs">{rows.length}</Badge>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="flex min-h-40 items-center justify-center rounded-md bg-muted/50 px-4 text-center text-sm text-muted-foreground">
+          {emptyText}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((row) => (
+            <div key={row.label} className="space-y-1">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="truncate font-medium">{row.label}</span>
+                <span className="shrink-0 text-muted-foreground">{row.display ?? `${row.value}${suffix}`}</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-accent"
+                  style={{
+                    width: `${Math.max((row.value / max) * 100, 4)}%`,
+                    backgroundColor: row.color,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
