@@ -54,11 +54,11 @@ export function DashboardPage() {
                     {myEntry.eloRating} ELO
                   </Badge>
                   <span className="text-primary-foreground/80 text-sm">
-                    #{myEntry.rank} ranked · {myEntry.wins}W / {myEntry.matchesPlayed - myEntry.wins}L
+                    #{myEntry.rank} ranked / {myEntry.wins}W / {myEntry.matchesPlayed - myEntry.wins}L
                   </span>
                 </>
               ) : (
-                <span className="text-primary-foreground/60 text-sm">No matches yet — start logging!</span>
+                <span className="text-primary-foreground/60 text-sm">No matches yet - start logging!</span>
               )}
             </div>
           </div>
@@ -153,14 +153,16 @@ function LeaderboardRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolea
       }`}
     >
       <span className="w-5 text-center text-xs font-bold text-muted-foreground">
-        {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : entry.rank}
+        {entry.rank}
       </span>
       <Avatar className="h-7 w-7">
         <AvatarFallback className="text-xs bg-secondary">{initials}</AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{entry.playerName}{isMe && " (you)"}</p>
-        <p className="text-xs text-muted-foreground">{entry.matchesPlayed}G · {winRate}% WR</p>
+        <Link to={`/players/${entry.playerId}`} className="block truncate text-sm font-medium hover:underline">
+          {entry.playerName}{isMe && " (you)"}
+        </Link>
+        <p className="text-xs text-muted-foreground">{entry.matchesPlayed}G / {winRate}% WR</p>
       </div>
       <Badge variant="outline" className="text-xs font-bold shrink-0">
         {entry.eloRating}
@@ -179,7 +181,7 @@ function MatchCard({ match, currentUserId }: { match: Match; currentUserId: stri
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">
-            {format(new Date(match.playedAt), "MMM d, yyyy")} · {match.locationName} ·{" "}
+            {format(new Date(match.playedAt), "MMM d, yyyy")} / {match.locationName} /{" "}
             {match.expansionName}
           </p>
           {winner && (

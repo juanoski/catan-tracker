@@ -619,7 +619,9 @@ function PlayerChip({
       }`}
     >
       <span className={`h-2.5 w-2.5 rounded-full ${colorClass} shrink-0`} />
-      <span>{player.playerName}</span>
+      <Link to={`/players/${player.playerId}`} className="hover:underline">
+        {player.playerName}
+      </Link>
       <span className="text-muted-foreground">{player.points}</span>
       {player.winner && <Crown className="h-3 w-3 text-accent" />}
       {player.longestRoad && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Road</Badge>}

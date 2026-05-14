@@ -89,6 +89,17 @@ export interface RatingHistoryEntry {
   recordedAt: string;
 }
 
+export interface PlayerAchievement {
+  id: string;
+  achievementId: string;
+  name: string;
+  description: string;
+  iconName: string;
+  category: string;
+  matchId: string | null;
+  unlockedAt: string;
+}
+
 export interface PlayerStats {
   playerId: string;
   playerName: string;

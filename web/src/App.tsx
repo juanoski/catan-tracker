@@ -9,6 +9,7 @@ import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { MatchesPage } from "@/pages/matches/MatchesPage";
 import { LogMatchPage } from "@/pages/match/LogMatchPage";
 import { LocationsPage } from "@/pages/locations/LocationsPage";
+import { PlayerProfilePage } from "@/pages/players/PlayerProfilePage";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/new" element={<LogMatchPage />} />
+          <Route path="/players/:playerId" element={<PlayerProfilePage />} />
           <Route path="/locations" element={<LocationsPage />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin/users" element={<UsersPage />} />
