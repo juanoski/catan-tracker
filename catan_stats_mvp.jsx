@@ -35,6 +35,7 @@ const DEFAULT_COLORS = [
 const DEFAULT_EXPANSIONS = ['Base Game', 'Seafarers', 'Cities & Knights', 'Traders & Barbarians'];
 const DEFAULT_LOCATIONS = ['Home', "Mora's", "Tomi's", 'Beach', 'Cabin'];
 const DEFAULT_PLAYERS = [{ name: 'Juani' }, { name: 'Mora' }, { name: 'Tomi' }, { name: 'Nati' }];
+const DEFAULT_FILTERS = { expansion: 'all', playerCount: 'all', host: 'all', location: 'all', dateFrom: '', dateTo: '' };
 
 const SEED_MATCHES = [
   {
@@ -125,6 +126,10 @@ function uniqueStrings(values) {
   return [...new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function shuffle(list) {
   const copy = [...list];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -195,7 +200,7 @@ function normalizeMatch(match, colors, locations) {
 
   return {
     id: match?.id || Date.now() + Math.random(),
-    date: String(match?.date || '2026-04-21'),
+    date: String(match?.date || todayIsoDate()),
     winner,
     location,
     host,
@@ -207,7 +212,7 @@ function normalizeMatch(match, colors, locations) {
 
 function createEmptyMatch(locations) {
   return {
-    date: '2026-04-21',
+    date: todayIsoDate(),
     winner: '',
     location: locations[0] || '',
     host: '',
@@ -517,12 +522,12 @@ function recapLines(matches, players, analytics) {
   ];
 }
 
-function Button({ children, onClick, variant = 'primary', className = '', type = 'button' }) {
+function Button({ children, onClick, variant = 'primary', className = '', type = 'button', ...props }) {
   const base = 'min-h-11 rounded-2xl px-4 py-2 text-sm font-medium transition';
   const style = variant === 'primary'
     ? 'border border-white/10 bg-white text-zinc-950 hover:bg-zinc-200'
     : 'border border-zinc-300 bg-white text-zinc-950 hover:bg-zinc-100 dark:border-white/20 dark:bg-zinc-950 dark:text-white dark:hover:bg-zinc-800';
-  return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
+  return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`} {...props}>{children}</button>;
 }
 
 function SectionCard({ title, icon: Icon, children, theme }) {
@@ -603,7 +608,7 @@ export default function CatanLiteManager() {
   const [playerDirectory, setPlayerDirectory] = useState(normalizePlayersDirectory(DEFAULT_PLAYERS, getPlayersFromMatches(SEED_MATCHES)));
   const [editingMatchId, setEditingMatchId] = useState(null);
   const [newMatch, setNewMatch] = useState(createEmptyMatch(DEFAULT_LOCATIONS));
-  const [filters, setFilters] = useState({ expansion: 'all', playerCount: 'all', host: 'all', location: 'all', dateFrom: '', dateTo: '' });
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS }));
   const [headToHead, setHeadToHead] = useState({ a: 'Juani', b: 'Mora' });
   const [selectedProfile, setSelectedProfile] = useState('Juani');
   const [boards, setBoards] = useState([makeBoard('Base Game', 1)]);
@@ -725,6 +730,7 @@ export default function CatanLiteManager() {
   const muted = theme === 'dark' ? 'text-zinc-300' : 'text-zinc-600';
   const panel = theme === 'dark' ? 'border-white/15 bg-zinc-900' : 'border-zinc-200 bg-white';
   const soft = theme === 'dark' ? 'border-white/12 bg-zinc-950' : 'border-zinc-200 bg-zinc-50';
+  const dateFilterInvalid = Boolean(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
 
   const expansionOptions = [{ value: 'all', label: 'All expansions' }, ...DEFAULT_EXPANSIONS.map((item) => ({ value: item, label: item }))];
   const playerCountOptions = [{ value: 'all', label: 'All player counts' }, ...[2, 3, 4, 5, 6, 7, 8].map((item) => ({ value: String(item), label: `${item} players` }))];
@@ -733,12 +739,42 @@ export default function CatanLiteManager() {
 
   const saveMatch = () => {
     const players = newMatch.players.map((player, index) => normalizePlayerEntry(player, colorOptions, index)).filter((player) => player.name);
+    const playerKeys = players.map((player) => player.name.toLowerCase());
+    const hasDuplicatePlayers = new Set(playerKeys).size !== playerKeys.length;
+    const winner = String(newMatch.winner || '').trim();
+    const host = String(newMatch.host || '').trim();
+    const location = String(newMatch.location || '').trim();
+
+    if (!newMatch.date) {
+      setStatus('Add a date before saving the match.');
+      return;
+    }
     if (players.length < 2) {
       setStatus('Add at least two players before saving the match.');
       return;
     }
-    if (!newMatch.location.trim()) {
+    if (hasDuplicatePlayers) {
+      setStatus('Each player can only appear once in the same match.');
+      return;
+    }
+    if (!location) {
       setStatus('Add a location before saving the match.');
+      return;
+    }
+    if (!winner || !players.some((player) => player.name === winner)) {
+      setStatus('Pick a winner from the players in this match.');
+      return;
+    }
+    if (!host || !players.some((player) => player.name === host)) {
+      setStatus('Pick a host from the players in this match.');
+      return;
+    }
+    if (!newMatch.expansionsUsed.length) {
+      setStatus('Pick at least one expansion before saving the match.');
+      return;
+    }
+    if (Number(newMatch.timerMinutes) < 0) {
+      setStatus('Timer minutes cannot be negative.');
       return;
     }
 
@@ -746,9 +782,9 @@ export default function CatanLiteManager() {
       {
         id: editingMatchId || Date.now(),
         date: newMatch.date,
-        winner: players.some((player) => player.name === newMatch.winner) ? newMatch.winner : players[0].name,
-        location: newMatch.location,
-        host: newMatch.host,
+        winner,
+        location,
+        host,
         expansionsUsed: newMatch.expansionsUsed,
         timerMinutes: newMatch.timerMinutes,
         players,
@@ -761,8 +797,14 @@ export default function CatanLiteManager() {
     setPlayerDirectory((prev) => normalizePlayersDirectory(prev, [...players.map((player) => player.name), payload.winner, payload.host]));
     setLocations((prev) => uniqueStrings([...prev, payload.location]));
     setEditingMatchId(null);
-    setNewMatch(createEmptyMatch(locations));
+    setNewMatch(createEmptyMatch(uniqueStrings([...locations, payload.location])));
     setStatus('Match saved.');
+  };
+
+  const deleteMatch = (match) => {
+    if (!window.confirm(`Delete the match from ${match.date} at ${match.location}?`)) return;
+    setMatches((prev) => prev.filter((item) => item.id !== match.id));
+    setStatus('Match deleted.');
   };
 
   const loadMatchForEdit = (match) => {
@@ -780,14 +822,17 @@ export default function CatanLiteManager() {
   };
 
   const addBoard = () => setBoards((prev) => [...prev, makeBoard('Base Game', prev.length + 1)]);
-  const removeBoard = (id) => setBoards((prev) => prev.length <= 1 ? prev : prev.filter((board) => board.id !== id).map((board, index) => ({ ...board, id: index + 1, title: `Board ${index + 1}` })));
+  const removeBoard = (id) => {
+    if (!window.confirm('Remove this generated board?')) return;
+    setBoards((prev) => prev.length <= 1 ? prev : prev.filter((board) => board.id !== id).map((board, index) => ({ ...board, id: index + 1, title: `Board ${index + 1}` })));
+  };
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ theme, colorOptions, locations, matches, playerDirectory, boards }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'catan-lite-export.json';
+    a.download = `catan-lite-export-${todayIsoDate()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -795,6 +840,7 @@ export default function CatanLiteManager() {
   const importJson = () => {
     try {
       const parsed = JSON.parse(importText);
+      if (!window.confirm('Importing JSON will replace the current local data. Continue?')) return;
       const nextColors = normalizeColorOptions(parsed.colorOptions || colorOptions);
       const nextLocations = uniqueStrings([...(parsed.locations || []), ...DEFAULT_LOCATIONS]);
       const nextMatches = (parsed.matches || []).map((match) => normalizeMatch(match, nextColors, nextLocations));
@@ -839,7 +885,10 @@ export default function CatanLiteManager() {
         </header>
 
         <div className={`mb-6 rounded-3xl border p-4 sm:p-5 ${panel}`}>
-          <div className='mb-3 flex items-center gap-2'><Filter className='h-5 w-5' /><h2 className='text-lg font-semibold'>Filters</h2></div>
+          <div className='mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+            <div className='flex items-center gap-2'><Filter className='h-5 w-5' /><h2 className='text-lg font-semibold'>Filters</h2></div>
+            <Button variant='secondary' onClick={() => setFilters({ ...DEFAULT_FILTERS })}>Clear filters</Button>
+          </div>
           <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-6'>
             <div>
               <Label text='Expansion' theme={theme} />
@@ -866,7 +915,14 @@ export default function CatanLiteManager() {
               <TextInput theme={theme} type='date' value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} />
             </div>
           </div>
+          {dateFilterInvalid ? <p className={`mt-3 text-sm ${muted}`}>Date from must be before date to.</p> : null}
         </div>
+
+        {status ? (
+          <div className={`mb-6 rounded-2xl border p-4 text-sm ${soft}`}>
+            {status}
+          </div>
+        ) : null}
 
         <nav className='mb-6 flex flex-wrap gap-2'>
           {['dashboard', 'charts', 'matches', 'profiles', 'recap', 'map', 'setup'].map((tab) => {
@@ -886,7 +942,7 @@ export default function CatanLiteManager() {
               <Stat title='Filtered matches' value={filteredMatches.length} subtitle={`${matches.length} total saved`} icon={Trophy} theme={theme} />
               <Stat title='Top winner' value={topWinner?.name || '-'} subtitle={topWinner ? `${topWinner.wins} wins` : 'No data'} icon={Users} theme={theme} />
               <Stat title='Best win streak' value={winStreakLeader?.name || '-'} subtitle={winStreakLeader ? `${winStreakLeader.bestWinStreak} wins in a row` : 'No streak'} icon={Route} theme={theme} />
-              <Stat title='Average time' value={analytics.averageTimer ? `${analytics.averageTimer} min` : '—'} subtitle='Across filtered matches' icon={Clock3} theme={theme} />
+              <Stat title='Average time' value={analytics.averageTimer ? `${analytics.averageTimer} min` : '-'} subtitle='Across filtered matches' icon={Clock3} theme={theme} />
             </div>
 
             <div className='grid gap-6 xl:grid-cols-[1.15fr_0.85fr]'>
@@ -902,7 +958,7 @@ export default function CatanLiteManager() {
                               <span className={`flex h-8 w-8 items-center justify-center rounded-full border ${theme === 'dark' ? 'border-white/20 bg-zinc-800' : 'border-zinc-200 bg-zinc-100'}`}>#{index + 1}</span>
                               <div>
                                 <p className='font-semibold'>{player.name}</p>
-                                <p className={`text-sm ${muted}`}>{player.wins} wins · {player.losses} losses · {player.games} games</p>
+                                <p className={`text-sm ${muted}`}>{player.wins} wins / {player.losses} losses / {player.games} games</p>
                               </div>
                             </div>
                           </div>
@@ -939,13 +995,13 @@ export default function CatanLiteManager() {
                   </div>
                   <div className='mt-4 grid gap-3 sm:grid-cols-2'>
                     <MiniStat title='Shared matches' value={head.games} theme={theme} />
-                    <MiniStat title='Average time' value={head.averageTimer ? `${head.averageTimer} min` : '—'} theme={theme} />
+                    <MiniStat title='Average time' value={head.averageTimer ? `${head.averageTimer} min` : '-'} theme={theme} />
                     <MiniStat title={`${headToHead.a || 'A'} wins`} value={head.winsA} theme={theme} />
                     <MiniStat title={`${headToHead.b || 'B'} wins`} value={head.winsB} theme={theme} />
                   </div>
                   <div className={`mt-4 rounded-2xl border p-4 ${soft}`}>
                     {head.latest ? (
-                      <p className={muted}>Latest duel: {head.latest.date} · winner: <span className='font-semibold text-current'>{head.latest.winner}</span> · {head.latest.location}</p>
+                      <p className={muted}>Latest duel: {head.latest.date} / winner: <span className='font-semibold text-current'>{head.latest.winner}</span> / {head.latest.location}</p>
                     ) : (
                       <p className={muted}>Pick two different players to see head-to-head results.</p>
                     )}
@@ -1037,7 +1093,11 @@ export default function CatanLiteManager() {
                         <div className='flex items-center gap-3'>
                           <span className='font-medium'>Player {index + 1}</span>
                         </div>
-                        <button onClick={() => setNewMatch((prev) => ({ ...prev, players: prev.players.filter((_, row) => row !== index) }))} className='rounded-xl p-2 hover:bg-black/10'>
+                        <button
+                          onClick={() => setNewMatch((prev) => ({ ...prev, players: prev.players.filter((_, row) => row !== index) }))}
+                          className='rounded-xl p-2 hover:bg-black/10'
+                          aria-label={`Remove player row ${index + 1}`}
+                        >
                           <Trash2 className='h-4 w-4' />
                         </button>
                       </div>
@@ -1085,7 +1145,7 @@ export default function CatanLiteManager() {
                         <div className='flex items-center gap-2'>
                           <p className='font-semibold'>{match.winner} won</p>
                         </div>
-                        <p className={`mt-1 text-sm ${muted}`}>{match.date} · {match.location} · hosted by {match.host} · {match.timerMinutes ? `${match.timerMinutes} min` : 'No timer'}</p>
+                        <p className={`mt-1 text-sm ${muted}`}>{match.date} / {match.location} / hosted by {match.host} / {match.timerMinutes ? `${match.timerMinutes} min` : 'No timer'}</p>
                       </div>
                       <div className='flex flex-wrap gap-2'>
                         {match.expansionsUsed.map((expansion) => <Pill key={expansion} theme={theme}>{expansion}</Pill>)}
@@ -1101,7 +1161,7 @@ export default function CatanLiteManager() {
                     </div>
                     <div className='mt-3 flex flex-col gap-3 sm:flex-row'>
                       <Button variant='secondary' onClick={() => loadMatchForEdit(match)}><Pencil className='mr-2 inline h-4 w-4' />Edit</Button>
-                      <Button variant='secondary' onClick={() => setMatches((prev) => prev.filter((item) => item.id !== match.id))}><Trash2 className='mr-2 inline h-4 w-4' />Delete</Button>
+                      <Button variant='secondary' onClick={() => deleteMatch(match)}><Trash2 className='mr-2 inline h-4 w-4' />Delete</Button>
                     </div>
                   </div>
                 ))}
@@ -1148,8 +1208,8 @@ export default function CatanLiteManager() {
                           <MiniStat title='Best win color' value={colorOptions.map((color) => ({ name: color.name, value: profileStats.winsByColor[color.name] || 0 })).sort((a, b) => b.value - a.value)[0]?.name || '-'} theme={theme} />
                           <MiniStat title='Hosted' value={profileStats.hosted} theme={theme} />
                           <MiniStat title='Injuries tracked' value={profileStats.totalInjuries} subtitle={`Worst match ${profileStats.maxInjuries}`} theme={theme} />
-                          <MiniStat title='Best matchup' value={bestMatchup?.opponent || '-'} subtitle={bestMatchup ? `${bestMatchup.wins}-${bestMatchup.losses} · ${bestMatchup.winRate}% win rate` : 'Not enough data'} theme={theme} />
-                          <MiniStat title='Worst matchup' value={worstMatchup?.opponent || '-'} subtitle={worstMatchup ? `${worstMatchup.wins}-${worstMatchup.losses} · ${worstMatchup.winRate}% win rate` : 'Not enough data'} theme={theme} />
+                          <MiniStat title='Best matchup' value={bestMatchup?.opponent || '-'} subtitle={bestMatchup ? `${bestMatchup.wins}-${bestMatchup.losses} / ${bestMatchup.winRate}% win rate` : 'Not enough data'} theme={theme} />
+                          <MiniStat title='Worst matchup' value={worstMatchup?.opponent || '-'} subtitle={worstMatchup ? `${worstMatchup.wins}-${worstMatchup.losses} / ${worstMatchup.winRate}% win rate` : 'Not enough data'} theme={theme} />
                         </div>
                       </SectionCard>
                     </div>
@@ -1159,8 +1219,8 @@ export default function CatanLiteManager() {
                           const player = match.players.find((item) => item.name === profileName);
                           return (
                             <div key={match.id} className={`rounded-2xl border p-4 ${soft}`}>
-                              <p className='font-semibold'>{match.winner === profileName ? 'Win' : 'Loss'} · {match.date}</p>
-                              <p className={`text-sm ${muted}`}>{match.location} · hosted by {match.host}</p>
+                              <p className='font-semibold'>{match.winner === profileName ? 'Win' : 'Loss'} / {match.date}</p>
+                              <p className={`text-sm ${muted}`}>{match.location} / hosted by {match.host}</p>
                               <div className='mt-2 flex flex-wrap gap-2'>
                                 {match.expansionsUsed.map((expansion) => <Pill key={expansion} theme={theme}>{expansion}</Pill>)}
                               </div>
@@ -1206,7 +1266,10 @@ export default function CatanLiteManager() {
             <SectionCard title='Map generator' icon={MapIcon} theme={theme}>
               <div className='flex flex-col gap-3 sm:flex-row'>
                 <Button variant='secondary' onClick={addBoard}><Plus className='mr-2 inline h-4 w-4' />Add board</Button>
-                <Button variant='secondary' onClick={() => setBoards((prev) => prev.map((board, index) => ({ ...makeBoard(board.expansion, index + 1), title: board.title, notes: board.notes, postGamePlaces: board.postGamePlaces, newPlace: '' })))}>Regenerate all</Button>
+                <Button variant='secondary' onClick={() => {
+                  if (!window.confirm('Regenerate every board layout?')) return;
+                  setBoards((prev) => prev.map((board, index) => ({ ...makeBoard(board.expansion, index + 1), title: board.title, notes: board.notes, postGamePlaces: board.postGamePlaces, newPlace: '' })));
+                }}>Regenerate all</Button>
               </div>
             </SectionCard>
 
@@ -1229,7 +1292,7 @@ export default function CatanLiteManager() {
                               {rowTiles.map((tile) => (
                                 <div key={tile.id} className={`flex h-20 w-20 flex-col items-center justify-center rounded-3xl border text-center text-white sm:h-24 sm:w-24 ${terrainClass(tile.terrain)}`}>
                                   <span className='text-[10px] uppercase tracking-wide sm:text-xs'>{tile.terrain}</span>
-                                  <span className='mt-1 text-lg font-bold sm:text-2xl'>{tile.number ?? '★'}</span>
+                                  <span className='mt-1 text-lg font-bold sm:text-2xl'>{tile.number ?? '*'}</span>
                                 </div>
                               ))}
                             </div>
@@ -1240,7 +1303,10 @@ export default function CatanLiteManager() {
 
                     <div className={`rounded-2xl border p-4 ${soft}`}>
                       <div className='space-y-3'>
-                        <Button variant='secondary' className='w-full' onClick={() => setBoards((prev) => prev.map((item, row) => row === boardIndex ? { ...item, tiles: makeBoard(item.expansion, item.id).tiles } : item))}>Regenerate board</Button>
+                        <Button variant='secondary' className='w-full' onClick={() => {
+                          if (!window.confirm(`Regenerate ${board.title}?`)) return;
+                          setBoards((prev) => prev.map((item, row) => row === boardIndex ? { ...item, tiles: makeBoard(item.expansion, item.id).tiles } : item));
+                        }}>Regenerate board</Button>
                         <Button variant='secondary' className='w-full' onClick={() => removeBoard(board.id)}>Remove board</Button>
                         <Field label='Post-game place' theme={theme}>
                           <TextInput theme={theme} value={board.newPlace || ''} onChange={(e) => setBoards((prev) => prev.map((item, row) => row === boardIndex ? { ...item, newPlace: e.target.value } : item))} />
@@ -1252,8 +1318,15 @@ export default function CatanLiteManager() {
                         }}>Add place</Button>
                         <div className='flex flex-wrap gap-2'>
                           {board.postGamePlaces.map((place, placeIndex) => (
-                            <button key={`${place}-${placeIndex}`} onClick={() => setBoards((prev) => prev.map((item, row) => row === boardIndex ? { ...item, postGamePlaces: item.postGamePlaces.filter((_, current) => current !== placeIndex) } : item))} className={`rounded-full border px-3 py-1 text-sm ${theme === 'dark' ? 'border-white/20 bg-zinc-800 text-white' : 'border-zinc-200 bg-zinc-100 text-zinc-950'}`}>
-                              {place} ×
+                            <button
+                              key={`${place}-${placeIndex}`}
+                              onClick={() => {
+                                if (!window.confirm(`Remove "${place}" from this board?`)) return;
+                                setBoards((prev) => prev.map((item, row) => row === boardIndex ? { ...item, postGamePlaces: item.postGamePlaces.filter((_, current) => current !== placeIndex) } : item));
+                              }}
+                              className={`rounded-full border px-3 py-1 text-sm ${theme === 'dark' ? 'border-white/20 bg-zinc-800 text-white' : 'border-zinc-200 bg-zinc-100 text-zinc-950'}`}
+                            >
+                              {place} x
                             </button>
                           ))}
                         </div>
@@ -1317,7 +1390,9 @@ export default function CatanLiteManager() {
                         setStatus('That player is still used in saved matches.');
                         return;
                       }
+                      if (!window.confirm(`Erase unused player "${target}"?`)) return;
                       setPlayerDirectory((prev) => prev.filter((player) => player.name !== target));
+                      setStatus('Player erased.');
                     }}>Erase unused player</Button>
                   </div>
                 </div>
@@ -1352,7 +1427,9 @@ export default function CatanLiteManager() {
                           setStatus('That location is still used in saved matches.');
                           return;
                         }
+                        if (!window.confirm(`Delete unused location "${target}"?`)) return;
                         setLocations((prev) => prev.filter((location) => location !== target));
+                        setStatus('Location deleted.');
                       }}>Delete unused</Button>
                     </div>
                   </div>
