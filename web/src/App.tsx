@@ -6,6 +6,7 @@ import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
 import { UsersPage } from "@/pages/admin/UsersPage";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
+import { MatchesPage } from "@/pages/matches/MatchesPage";
 import { LogMatchPage } from "@/pages/match/LogMatchPage";
 import { LocationsPage } from "@/pages/locations/LocationsPage";
 
@@ -17,6 +18,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/new" element={<LogMatchPage />} />
           <Route path="/locations" element={<LocationsPage />} />
           <Route element={<AdminRoute />}>

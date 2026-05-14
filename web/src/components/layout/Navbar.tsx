@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X, Shield, Users } from "lucide-react";
+import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X, Shield, Users, Swords } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,9 @@ export function Navbar() {
         <nav className="hidden md:flex items-center gap-2">
           <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
             <Link to="/"><LayoutDashboard className="mr-1.5 h-4 w-4" />Dashboard</Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
+            <Link to="/matches"><Swords className="mr-1.5 h-4 w-4" />Matches</Link>
           </Button>
           <Button variant="ghost" size="sm" asChild className="text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
             <Link to="/matches/new"><PlusCircle className="mr-1.5 h-4 w-4" />Log Match</Link>
@@ -94,6 +97,13 @@ export function Navbar() {
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
           >
             <LayoutDashboard className="h-4 w-4" /> Dashboard
+          </Link>
+          <Link
+            to="/matches"
+            onClick={() => setMenuOpen(false)}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-primary/80"
+          >
+            <Swords className="h-4 w-4" /> Matches
           </Link>
           <Link
             to="/matches/new"

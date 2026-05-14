@@ -1,0 +1,451 @@
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  CalendarDays,
+  Clock3,
+  Crown,
+  Filter,
+  MapPin,
+  PlusCircle,
+  RotateCcw,
+  Swords,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import { toast } from "sonner";
+import api from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Expansion, Location, Match, PageResponse, Player } from "@/types/api";
+
+const CATAN_COLORS: Record<string, string> = {
+  red: "bg-red-500",
+  blue: "bg-blue-500",
+  white: "bg-gray-100 border border-gray-300",
+  orange: "bg-orange-500",
+  green: "bg-green-600",
+  brown: "bg-amber-800",
+  yellow: "bg-yellow-400",
+  purple: "bg-purple-600",
+};
+
+const DEFAULT_FILTERS = {
+  expansionId: "all",
+  playerId: "all",
+  locationId: "all",
+  playerCount: "all",
+  dateFrom: "",
+  dateTo: "",
+};
+
+type MatchFilters = typeof DEFAULT_FILTERS;
+
+export function MatchesPage() {
+  const { user } = useAuth();
+  const [filters, setFilters] = useState<MatchFilters>({ ...DEFAULT_FILTERS });
+
+  const { data: matchPage, isPending: loadingMatches } = useQuery({
+    queryKey: ["matches", "history"],
+    queryFn: () =>
+      api
+        .get<PageResponse<Match>>("/matches?size=100&sort=playedAt,desc")
+        .then((r) => r.data),
+  });
+
+  const { data: players = [] } = useQuery({
+    queryKey: ["players"],
+    queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
+  });
+
+  const { data: locations = [] } = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => api.get<Location[]>("/locations").then((r) => r.data),
+  });
+
+  const { data: expansions = [] } = useQuery({
+    queryKey: ["expansions"],
+    queryFn: () => api.get<Expansion[]>("/expansions").then((r) => r.data),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/matches/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      toast.success("Match deleted");
+    },
+    onError: (error: unknown) => {
+      const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg ?? "Failed to delete match");
+    },
+  });
+
+  const matches = matchPage?.content ?? [];
+  const filteredMatches = useMemo(() => filterMatches(matches, filters), [matches, filters]);
+  const summary = useMemo(() => buildSummary(filteredMatches), [filteredMatches]);
+  const dateFilterInvalid = Boolean(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
+
+  function updateFilter<K extends keyof MatchFilters>(key: K, value: MatchFilters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleDelete(match: Match) {
+    if (match.createdById !== user?.playerId) {
+      toast.error("Only the creator can delete this match");
+      return;
+    }
+
+    const playedAt = format(new Date(match.playedAt), "MMM d, yyyy");
+    if (confirm(`Delete the match from ${playedAt} at ${match.locationName}?`)) {
+      deleteMutation.mutate(match.id);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-primary">Matches</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Browse match history, filter game nights, and spot the current storylines.
+          </p>
+        </div>
+        <Button asChild>
+          <Link to="/matches/new">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Log match
+          </Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Filter className="h-4 w-4 text-accent" />
+              Filters
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setFilters({ ...DEFAULT_FILTERS })}>
+              <RotateCcw className="mr-1.5 h-4 w-4" />
+              Clear
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <FilterSelect
+              label="Expansion"
+              value={filters.expansionId}
+              onValueChange={(value) => updateFilter("expansionId", value)}
+              options={expansions.map((expansion) => ({ value: expansion.id, label: expansion.name }))}
+              allLabel="All expansions"
+            />
+            <FilterSelect
+              label="Player"
+              value={filters.playerId}
+              onValueChange={(value) => updateFilter("playerId", value)}
+              options={players.map((player) => ({ value: player.id, label: player.name }))}
+              allLabel="All players"
+            />
+            <FilterSelect
+              label="Location"
+              value={filters.locationId}
+              onValueChange={(value) => updateFilter("locationId", value)}
+              options={locations.map((location) => ({ value: location.id, label: location.name }))}
+              allLabel="All locations"
+            />
+            <FilterSelect
+              label="Player count"
+              value={filters.playerCount}
+              onValueChange={(value) => updateFilter("playerCount", value)}
+              options={[2, 3, 4, 5, 6].map((count) => ({ value: String(count), label: `${count} players` }))}
+              allLabel="All counts"
+            />
+            <div className="space-y-2">
+              <Label>Date from</Label>
+              <Input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => updateFilter("dateFrom", event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Date to</Label>
+              <Input
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => updateFilter("dateTo", event.target.value)}
+              />
+            </div>
+          </div>
+          {dateFilterInvalid && (
+            <p className="text-sm text-destructive mt-3">Date from must be before date to.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard icon={Swords} title="Filtered matches" value={filteredMatches.length} subtitle={`${matches.length} loaded`} />
+        <SummaryCard icon={Crown} title="Top winner" value={summary.topWinner?.name ?? "-"} subtitle={summary.topWinner ? `${summary.topWinner.wins} wins` : "No wins yet"} />
+        <SummaryCard icon={Clock3} title="Average time" value={summary.averageDuration ? `${summary.averageDuration} min` : "-"} subtitle="Timed matches only" />
+        <SummaryCard icon={MapPin} title="Top location" value={summary.topLocation?.name ?? "-"} subtitle={summary.topLocation ? `${summary.topLocation.matches} matches` : "No matches yet"} />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarDays className="h-4 w-4 text-accent" />
+            Match history
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loadingMatches ? (
+            Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-28 rounded-lg" />
+            ))
+          ) : filteredMatches.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No matches found for these filters.</p>
+            </div>
+          ) : (
+            filteredMatches.map((match) => (
+              <HistoryMatchCard
+                key={match.id}
+                match={match}
+                currentUserId={user?.playerId ?? ""}
+                onDelete={() => handleDelete(match)}
+                deleting={deleteMutation.isPending && deleteMutation.variables === match.id}
+              />
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function filterMatches(matches: Match[], filters: MatchFilters) {
+  return matches.filter((match) => {
+    if (filters.expansionId !== "all" && match.expansionId !== filters.expansionId) return false;
+    if (filters.locationId !== "all" && match.locationId !== filters.locationId) return false;
+    if (filters.playerCount !== "all" && String(match.players.length) !== filters.playerCount) return false;
+    if (filters.playerId !== "all" && !match.players.some((player) => player.playerId === filters.playerId)) return false;
+
+    const playedDate = match.playedAt.slice(0, 10);
+    if (filters.dateFrom && playedDate < filters.dateFrom) return false;
+    if (filters.dateTo && playedDate > filters.dateTo) return false;
+    return true;
+  });
+}
+
+function buildSummary(matches: Match[]) {
+  const winnerCounts = new Map<string, { name: string; wins: number }>();
+  const locationCounts = new Map<string, { name: string; matches: number }>();
+  let durationTotal = 0;
+  let durationCount = 0;
+
+  matches.forEach((match) => {
+    const winner = match.players.find((player) => player.winner);
+    if (winner) {
+      const current = winnerCounts.get(winner.playerId) ?? { name: winner.playerName, wins: 0 };
+      winnerCounts.set(winner.playerId, { ...current, wins: current.wins + 1 });
+    }
+
+    const currentLocation = locationCounts.get(match.locationId) ?? { name: match.locationName, matches: 0 };
+    locationCounts.set(match.locationId, { ...currentLocation, matches: currentLocation.matches + 1 });
+
+    if (match.durationMinutes && match.durationMinutes > 0) {
+      durationTotal += match.durationMinutes;
+      durationCount += 1;
+    }
+  });
+
+  return {
+    topWinner: [...winnerCounts.values()].sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name))[0],
+    topLocation: [...locationCounts.values()].sort((a, b) => b.matches - a.matches || a.name.localeCompare(b.name))[0],
+    averageDuration: durationCount ? Math.round(durationTotal / durationCount) : 0,
+  };
+}
+
+function FilterSelect({
+  label,
+  value,
+  onValueChange,
+  options,
+  allLabel,
+}: {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  allLabel: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{allLabel}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function SummaryCard({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+}: {
+  icon: typeof Swords;
+  title: string;
+  value: string | number;
+  subtitle: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-2xl font-semibold mt-1">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+          </div>
+          <div className="rounded-md bg-accent/15 p-2 text-accent">
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HistoryMatchCard({
+  match,
+  currentUserId,
+  onDelete,
+  deleting,
+}: {
+  match: Match;
+  currentUserId: string;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const winner = match.players.find((player) => player.winner);
+  const currentUserEntry = match.players.find((player) => player.playerId === currentUserId);
+  const canDelete = match.createdById === currentUserId;
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">
+              {winner ? `${winner.playerName} won` : "No winner recorded"}
+            </p>
+            {currentUserEntry && (
+              <Badge variant={currentUserEntry.winner ? "default" : "secondary"} className="text-xs">
+                {currentUserEntry.winner ? "You won" : "You played"}
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} / {match.locationName} / {match.expansionName}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Logged by {match.createdByName}
+            {match.durationMinutes ? ` / ${match.durationMinutes} min` : ""}
+            {match.deckLayout ? ` / ${match.deckLayout} board` : ""}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {winner && (
+            <Badge variant="outline" className="shrink-0">
+              {winner.points} pts
+            </Badge>
+          )}
+          {canDelete && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={onDelete}
+              disabled={deleting}
+              aria-label="Delete match"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {match.players.map((player) => (
+          <PlayerChip key={player.id} player={player} isCurrentUser={player.playerId === currentUserId} />
+        ))}
+      </div>
+
+      {match.notes && (
+        <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{match.notes}</p>
+      )}
+    </div>
+  );
+}
+
+function PlayerChip({
+  player,
+  isCurrentUser,
+}: {
+  player: Match["players"][number];
+  isCurrentUser: boolean;
+}) {
+  const colorClass = CATAN_COLORS[player.color.toLowerCase()] ?? "bg-gray-400";
+  const delta = player.eloDelta;
+
+  return (
+    <div
+      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+        isCurrentUser ? "border-accent bg-accent/10 font-semibold" : "border-border bg-background"
+      }`}
+    >
+      <span className={`h-2.5 w-2.5 rounded-full ${colorClass} shrink-0`} />
+      <span>{player.playerName}</span>
+      <span className="text-muted-foreground">{player.points}</span>
+      {player.winner && <Crown className="h-3 w-3 text-accent" />}
+      {player.longestRoad && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Road</Badge>}
+      {player.largestArmy && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Army</Badge>}
+      <span
+        className={`flex items-center gap-0.5 ${
+          delta > 0 ? "text-green-600" : delta < 0 ? "text-destructive" : "text-muted-foreground"
+        }`}
+      >
+        {delta > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+        {delta > 0 ? "+" : ""}
+        {delta}
+      </span>
+    </div>
+  );
+}
