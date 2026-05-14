@@ -377,10 +377,10 @@ function MatchCard({ match, currentUserId }: { match: Match; currentUserId: stri
             {match.expansionName}
           </p>
           {winner && (
-            <p className="text-sm font-medium flex items-center gap-1 mt-0.5">
+            <Link to={`/matches/${match.id}`} className="text-sm font-medium flex items-center gap-1 mt-0.5 hover:underline">
               <Crown className="h-3.5 w-3.5 text-accent" />
               {winner.playerName} won with {winner.points} pts
-            </p>
+            </Link>
           )}
         </div>
         {myEntry && (

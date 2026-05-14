@@ -548,9 +548,9 @@ function HistoryMatchCard({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold">
+            <Link to={`/matches/${match.id}`} className="font-semibold hover:underline">
               {winner ? `${winner.playerName} won` : "No winner recorded"}
-            </p>
+            </Link>
             {currentUserEntry && (
               <Badge variant={currentUserEntry.winner ? "default" : "secondary"} className="text-xs">
                 {currentUserEntry.winner ? "You won" : "You played"}
@@ -558,7 +558,9 @@ function HistoryMatchCard({
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} / {match.locationName} / {match.expansionName}
+            <Link to={`/matches/${match.id}`} className="hover:underline">
+              {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} / {match.locationName} / {match.expansionName}
+            </Link>
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Logged by {match.createdByName}

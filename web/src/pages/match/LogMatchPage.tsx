@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { Expansion, Location, Player, Match } from "@/types/api";
+import type { Expansion, Location, Player, Match, PageResponse } from "@/types/api";
 
 const CATAN_COLORS = [
   { value: "red", label: "Red", hex: "#ef4444" },
@@ -73,6 +73,11 @@ export function LogMatchPage() {
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
 
+  const { data: recentMatchPage } = useQuery({
+    queryKey: ["matches", "recent"],
+    queryFn: () => api.get<PageResponse<Match>>("/matches?size=10&sort=playedAt,desc").then((r) => r.data),
+  });
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -123,6 +128,33 @@ export function LogMatchPage() {
   }
 
   const watchedPlayers = form.watch("players");
+  const selectedPlayerIds = watchedPlayers.map((player) => player.playerId).filter(Boolean);
+  const recentPlayers = getRecentPlayers(recentMatchPage?.content ?? [], players ?? []);
+
+  function addPlayer(playerId: string, preferredColor?: string) {
+    if (selectedPlayerIds.includes(playerId)) {
+      toast.error("That player is already in this match");
+      return;
+    }
+    if (fields.length >= 6) {
+      toast.error("Maximum 6 players");
+      return;
+    }
+
+    const takenColors = watchedPlayers.map((player) => player.color);
+    const color = preferredColor && !takenColors.includes(preferredColor)
+      ? preferredColor
+      : CATAN_COLORS.find((item) => !takenColors.includes(item.value))?.value ?? CATAN_COLORS[fields.length % CATAN_COLORS.length].value;
+
+    append({
+      playerId,
+      color,
+      points: 0,
+      winner: false,
+      longestRoad: false,
+      largestArmy: false,
+    });
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -207,7 +239,7 @@ export function LogMatchPage() {
                   name="durationMinutes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Duration (min) <span className="text-muted-foreground font-normal">— optional</span></FormLabel>
+                      <FormLabel>Duration (min) <span className="text-muted-foreground font-normal">- optional</span></FormLabel>
                       <FormControl>
                         <Input type="number" min={0} placeholder="e.g. 90" {...field} />
                       </FormControl>
@@ -231,8 +263,8 @@ export function LogMatchPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="single">Single board (3–4 players)</SelectItem>
-                          <SelectItem value="double">Double board (5–6 players)</SelectItem>
+                          <SelectItem value="single">Single board (3-4 players)</SelectItem>
+                          <SelectItem value="double">Double board (5-6 players)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -246,7 +278,7 @@ export function LogMatchPage() {
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Notes <span className="text-muted-foreground font-normal">— optional</span></FormLabel>
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">- optional</span></FormLabel>
                     <FormControl>
                       <Textarea placeholder="Anything memorable about this game?" rows={2} {...field} />
                     </FormControl>
@@ -284,6 +316,26 @@ export function LogMatchPage() {
               </div>
               {form.formState.errors.players?.root && (
                 <p className="text-sm text-destructive">{form.formState.errors.players.root.message}</p>
+              )}
+              {recentPlayers.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {recentPlayers.slice(0, 8).map((player) => (
+                    <Button
+                      key={player.playerId}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addPlayer(player.playerId, player.color)}
+                      disabled={selectedPlayerIds.includes(player.playerId) || fields.length >= 6}
+                    >
+                      <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
+                      {player.playerName}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {selectedPlayerIds.length !== new Set(selectedPlayerIds).size && (
+                <p className="mt-2 text-sm text-destructive">Each player can only appear once.</p>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
@@ -498,4 +550,24 @@ function PlayerRow({
       </div>
     </div>
   );
+}
+
+function getRecentPlayers(matches: Match[], players: Player[]) {
+  const knownPlayers = new Set(players.map((player) => player.id));
+  const seen = new Set<string>();
+  const recent: Array<{ playerId: string; playerName: string; color: string }> = [];
+
+  matches.forEach((match) => {
+    match.players.forEach((player) => {
+      if (!knownPlayers.has(player.playerId) || seen.has(player.playerId)) return;
+      seen.add(player.playerId);
+      recent.push({
+        playerId: player.playerId,
+        playerName: player.playerName,
+        color: player.color.toLowerCase(),
+      });
+    });
+  });
+
+  return recent;
 }
