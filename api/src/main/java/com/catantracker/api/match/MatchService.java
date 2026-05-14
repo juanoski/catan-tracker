@@ -126,6 +126,56 @@ public class MatchService {
     }
 
     @Transactional
+    public MatchResponse update(UUID id, UUID requesterId, CreateMatchRequest req) {
+        validatePlayers(req);
+
+        Match match = matchRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Match not found"));
+        if (!match.getCreatedBy().getId().equals(requesterId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the creator can edit this match");
+        }
+
+        Location location = locationService.getEntityById(req.locationId());
+        Expansion expansion = expansionRepository.findById(req.expansionId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Expansion not found"));
+
+        match.setLocation(location);
+        match.setExpansion(expansion);
+        match.setPlayedAt(req.playedAt());
+        match.setDurationMinutes(req.durationMinutes());
+        match.setDeckLayout(req.deckLayout() != null ? req.deckLayout() : "single");
+        match.setNotes(req.notes());
+        match.setDailyMap(req.dailyMapId() != null ? dailyMapService.getEntityById(req.dailyMapId()) : null);
+
+        ratingHistoryRepository.deleteByMatchId(match.getId());
+        match.getMatchPlayers().clear();
+        matchRepository.saveAndFlush(match);
+
+        for (var playerReq : req.players()) {
+            Player player = playerService.getEntityById(playerReq.playerId());
+            MatchPlayer mp = MatchPlayer.builder()
+                    .match(match)
+                    .player(player)
+                    .color(playerReq.color())
+                    .points(playerReq.points())
+                    .winner(playerReq.winner())
+                    .longestRoad(playerReq.longestRoad())
+                    .largestArmy(playerReq.largestArmy())
+                    .eloBefore(player.getEloRating())
+                    .eloAfter(player.getEloRating())
+                    .build();
+            match.getMatchPlayers().add(mp);
+        }
+
+        matchRepository.saveAndFlush(match);
+        recomputeAllRatings();
+
+        return matchRepository.findByIdWithDetails(match.getId())
+                .map(MatchResponse::from)
+                .orElseThrow();
+    }
+
+    @Transactional
     public void delete(UUID id, UUID requesterId) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Match not found"));
@@ -139,6 +189,51 @@ public class MatchService {
         long winnerCount = req.players().stream().filter(p -> p.winner()).count();
         if (winnerCount != 1) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Exactly one player must be marked as winner");
+        }
+    }
+
+    private void recomputeAllRatings() {
+        ratingHistoryRepository.deleteAll();
+
+        List<Player> players = playerRepository.findAll();
+        for (Player player : players) {
+            player.setEloRating(1000);
+        }
+        playerRepository.saveAll(players);
+
+        List<Match> matches = matchRepository.findAllWithPlayersOrderByPlayedAtAsc();
+        for (Match match : matches) {
+            List<EloService.MatchPlayerInput> eloInputs = match.getMatchPlayers().stream()
+                    .map(mp -> new EloService.MatchPlayerInput(
+                            mp.getPlayer().getId(),
+                            mp.getPlayer().getEloRating(),
+                            mp.isWinner()))
+                    .toList();
+
+            Map<UUID, Integer> newRatings = eloService.computeNewRatings(eloInputs);
+
+            for (MatchPlayer mp : match.getMatchPlayers()) {
+                Player player = mp.getPlayer();
+                int eloBefore = player.getEloRating();
+                int eloAfter = newRatings.get(player.getId());
+
+                mp.setEloBefore(eloBefore);
+                mp.setEloAfter(eloAfter);
+                matchPlayerRepository.save(mp);
+
+                player.setEloRating(eloAfter);
+                playerRepository.save(player);
+
+                RatingHistory history = RatingHistory.builder()
+                        .player(player)
+                        .match(match)
+                        .eloBefore(eloBefore)
+                        .eloAfter(eloAfter)
+                        .delta(eloAfter - eloBefore)
+                        .recordedAt(Instant.now())
+                        .build();
+                ratingHistoryRepository.save(history);
+            }
         }
     }
 }

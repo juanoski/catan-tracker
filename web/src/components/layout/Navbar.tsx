@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X, Shield, Users, Swords, Trophy } from "lucide-react";
+import { LogOut, PlusCircle, LayoutDashboard, MapPin, Menu, X, Shield, Users, Swords, Trophy, User } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ export function Navbar() {
 
   const navItems = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, active: location.pathname === "/" },
+    ...(user ? [{ to: `/players/${user.playerId}`, label: "My Profile", icon: User, active: location.pathname === `/players/${user.playerId}` }] : []),
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy, active: location.pathname === "/leaderboard" },
     { to: "/matches", label: "Matches", icon: Swords, active: location.pathname === "/matches" || (location.pathname.startsWith("/matches/") && location.pathname !== "/matches/new") },
     { to: "/matches/new", label: "Log Match", icon: PlusCircle, active: location.pathname === "/matches/new" },

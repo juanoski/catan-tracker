@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Medal, Trophy, Users } from "lucide-react";
@@ -7,16 +8,21 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { LeaderboardEntry } from "@/types/api";
+
+type SortKey = "elo" | "wins" | "matches" | "winRate" | "name";
 
 export function LeaderboardPage() {
   const { user } = useAuth();
+  const [sortKey, setSortKey] = useState<SortKey>("elo");
 
   const { data: leaderboardData = [], isPending, isError } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: () => api.get<LeaderboardEntry[]>("/leaderboard").then((r) => r.data),
   });
   const leaderboard = Array.isArray(leaderboardData) ? leaderboardData : [];
+  const sortedLeaderboard = useMemo(() => sortLeaderboard(leaderboard, sortKey), [leaderboard, sortKey]);
 
   return (
     <div className="space-y-6">
@@ -35,10 +41,26 @@ export function LeaderboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Trophy className="h-4 w-4 text-accent" />
-            Rankings
-          </CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Trophy className="h-4 w-4 text-accent" />
+              Rankings
+            </CardTitle>
+            <div className="w-full sm:w-48">
+              <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="elo">Sort by ELO</SelectItem>
+                  <SelectItem value="wins">Sort by wins</SelectItem>
+                  <SelectItem value="matches">Sort by matches</SelectItem>
+                  <SelectItem value="winRate">Sort by win rate</SelectItem>
+                  <SelectItem value="name">Sort by name</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isPending ? (
@@ -66,14 +88,14 @@ export function LeaderboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {leaderboard.map((entry) => {
+                  {sortedLeaderboard.map((entry, index) => {
                     const losses = entry.matchesPlayed - entry.wins;
                     const winRate = entry.matchesPlayed ? Math.round((entry.wins / entry.matchesPlayed) * 100) : 0;
                     const isMe = entry.playerId === user?.playerId;
 
                     return (
                       <tr key={entry.playerId} className={isMe ? "border-b bg-accent/10 last:border-0" : "border-b last:border-0"}>
-                        <td className="py-3 pr-3 font-semibold">#{entry.rank}</td>
+                        <td className="py-3 pr-3 font-semibold">#{sortKey === "elo" ? entry.rank : index + 1}</td>
                         <td className="py-3 pr-3">
                           <div className="flex items-center gap-2">
                             <Avatar className="h-8 w-8">
@@ -137,6 +159,20 @@ function Summary({
 
 function getMostWins(entries: LeaderboardEntry[]) {
   return [...entries].sort((a, b) => b.wins - a.wins || a.playerName.localeCompare(b.playerName))[0];
+}
+
+function sortLeaderboard(entries: LeaderboardEntry[], sortKey: SortKey) {
+  return [...entries].sort((a, b) => {
+    if (sortKey === "wins") return b.wins - a.wins || b.eloRating - a.eloRating;
+    if (sortKey === "matches") return b.matchesPlayed - a.matchesPlayed || b.eloRating - a.eloRating;
+    if (sortKey === "winRate") {
+      const aRate = a.matchesPlayed ? a.wins / a.matchesPlayed : 0;
+      const bRate = b.matchesPlayed ? b.wins / b.matchesPlayed : 0;
+      return bRate - aRate || b.eloRating - a.eloRating;
+    }
+    if (sortKey === "name") return a.playerName.localeCompare(b.playerName);
+    return a.rank - b.rank;
+  });
 }
 
 function getInitials(name: string) {

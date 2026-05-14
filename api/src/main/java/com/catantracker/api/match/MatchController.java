@@ -39,6 +39,13 @@ public class MatchController {
         return matchService.create(principal.getId(), req);
     }
 
+    @PatchMapping("/{id}")
+    public MatchResponse update(@PathVariable UUID id,
+                                @AuthenticationPrincipal PlayerPrincipal principal,
+                                @Valid @RequestBody CreateMatchRequest req) {
+        return matchService.update(id, principal.getId(), req);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id,
                                        @AuthenticationPrincipal PlayerPrincipal principal) {

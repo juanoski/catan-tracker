@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface RatingHistoryRepository extends JpaRepository<RatingHistory, UUID> {
     List<RatingHistory> findByPlayerIdOrderByRecordedAtAsc(UUID playerId);
+    void deleteByMatchId(UUID matchId);
 }

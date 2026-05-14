@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Crown, MapPin, Trash2, Trophy, Users } from "lucide-react";
+import { ArrowLeft, Crown, MapPin, Pencil, Trash2, Trophy, Users } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -32,6 +32,11 @@ export function MatchDetailPage() {
     queryKey: ["matches", matchId],
     queryFn: () => api.get<Match>(`/matches/${matchId}`).then((r) => r.data),
     enabled: Boolean(matchId),
+  });
+
+  const { data: matchPage } = useQuery({
+    queryKey: ["matches", "history"],
+    queryFn: () => api.get<{ content: Match[] }>("/matches?size=100&sort=playedAt,desc").then((r) => r.data),
   });
 
   const deleteMutation = useMutation({
@@ -75,6 +80,9 @@ export function MatchDetailPage() {
 
   const winner = match.players.find((player) => player.winner);
   const canDelete = match.createdById === user?.playerId;
+  const matchIndex = (matchPage?.content ?? []).findIndex((item) => item.id === match.id);
+  const previousMatch = matchIndex >= 0 ? matchPage?.content[matchIndex + 1] : undefined;
+  const nextMatch = matchIndex > 0 ? matchPage?.content[matchIndex - 1] : undefined;
 
   return (
     <div className="space-y-6">
@@ -83,18 +91,34 @@ export function MatchDetailPage() {
           <ArrowLeft className="mr-1.5 h-4 w-4" />
           Back
         </Button>
-        {canDelete && (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              if (confirm("Delete this match?")) deleteMutation.mutate(match.id);
-            }}
-            disabled={deleteMutation.isPending}
-          >
-            <Trash2 className="mr-1.5 h-4 w-4" />
-            Delete
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild disabled={!previousMatch}>
+            <Link to={previousMatch ? `/matches/${previousMatch.id}` : "#"}>Previous</Link>
           </Button>
+          <Button variant="outline" size="sm" asChild disabled={!nextMatch}>
+            <Link to={nextMatch ? `/matches/${nextMatch.id}` : "#"}>Next</Link>
+          </Button>
+        </div>
+        {canDelete && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/matches/${match.id}/edit`}>
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (confirm("Delete this match?")) deleteMutation.mutate(match.id);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete
+            </Button>
+          </div>
         )}
       </div>
 

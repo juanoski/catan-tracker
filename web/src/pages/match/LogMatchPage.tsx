@@ -1,7 +1,8 @@
+import { useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, PlusCircle, Trash2, Crown } from "lucide-react";
@@ -57,6 +58,8 @@ type FormValues = z.infer<typeof schema>;
 
 export function LogMatchPage() {
   const navigate = useNavigate();
+  const { matchId } = useParams();
+  const isEditing = Boolean(matchId);
 
   const { data: locations } = useQuery({
     queryKey: ["locations"],
@@ -78,6 +81,12 @@ export function LogMatchPage() {
     queryFn: () => api.get<PageResponse<Match>>("/matches?size=10&sort=playedAt,desc").then((r) => r.data),
   });
 
+  const { data: editingMatch } = useQuery({
+    queryKey: ["matches", matchId],
+    queryFn: () => api.get<Match>(`/matches/${matchId}`).then((r) => r.data),
+    enabled: isEditing,
+  });
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -95,9 +104,29 @@ export function LogMatchPage() {
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "players" });
 
+  useEffect(() => {
+    if (!editingMatch) return;
+    form.reset({
+      locationId: editingMatch.locationId,
+      expansionId: editingMatch.expansionId,
+      playedAt: format(new Date(editingMatch.playedAt), "yyyy-MM-dd'T'HH:mm"),
+      durationMinutes: editingMatch.durationMinutes ?? undefined,
+      deckLayout: editingMatch.deckLayout === "double" ? "double" : "single",
+      notes: editingMatch.notes ?? "",
+      players: editingMatch.players.map((player) => ({
+        playerId: player.playerId,
+        color: player.color,
+        points: player.points,
+        winner: player.winner,
+        longestRoad: player.longestRoad,
+        largestArmy: player.largestArmy,
+      })),
+    });
+  }, [editingMatch, form]);
+
   const mutation = useMutation({
     mutationFn: (data: FormValues) =>
-      api.post<Match>("/matches", {
+      api[isEditing ? "patch" : "post"]<Match>(isEditing ? `/matches/${matchId}` : "/matches", {
         ...data,
         playedAt: new Date(data.playedAt).toISOString().replace("Z", ""),
         durationMinutes: data.durationMinutes || undefined,
@@ -106,12 +135,12 @@ export function LogMatchPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["matches"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
-      toast.success("Match logged! ELO updated.");
-      navigate("/");
+      toast.success(isEditing ? "Match updated! ELO recalculated." : "Match logged! ELO updated.");
+      navigate(isEditing && matchId ? `/matches/${matchId}` : "/");
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to log match");
+      toast.error(msg ?? (isEditing ? "Failed to update match" : "Failed to log match"));
     },
   });
 
@@ -159,8 +188,10 @@ export function LogMatchPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-primary">Log a Match</h1>
-        <p className="text-muted-foreground text-sm mt-1">Record the results and update everyone's ELO</p>
+        <h1 className="text-2xl font-bold text-primary">{isEditing ? "Edit Match" : "Log a Match"}</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          {isEditing ? "Update the result and recalculate ELO" : "Record the results and update everyone's ELO"}
+        </p>
       </div>
 
       <Form {...form}>
@@ -368,7 +399,7 @@ export function LogMatchPage() {
             disabled={mutation.isPending}
           >
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save match & update ELO
+            {isEditing ? "Save changes & recalculate ELO" : "Save match & update ELO"}
           </Button>
         </form>
       </Form>

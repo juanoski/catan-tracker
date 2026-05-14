@@ -61,7 +61,7 @@ public class EloService {
     private double actualScore(MatchPlayerInput a, MatchPlayerInput b) {
         if (a.winner()) return 1.0;
         if (b.winner()) return 0.0;
-        return 0.5; // both are losers → draw between them
+        return 0.5; // both are losers, so treat their matchup as a draw
     }
 
     public record MatchPlayerInput(UUID playerId, int eloRating, boolean winner) {}

@@ -24,6 +24,7 @@ export default function App() {
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/new" element={<LogMatchPage />} />
+          <Route path="/matches/:matchId/edit" element={<LogMatchPage />} />
           <Route path="/matches/:matchId" element={<MatchDetailPage />} />
           <Route path="/players/:playerId" element={<PlayerProfilePage />} />
           <Route path="/locations" element={<LocationsPage />} />

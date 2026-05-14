@@ -9,6 +9,7 @@ import {
   Crown,
   Filter,
   MapPin,
+  Pencil,
   PlusCircle,
   RotateCcw,
   Swords,
@@ -53,6 +54,7 @@ const CATAN_COLOR_HEX: Record<string, string> = {
 };
 
 const DEFAULT_FILTERS = {
+  search: "",
   expansionId: "all",
   playerId: "all",
   locationId: "all",
@@ -158,6 +160,14 @@ export function MatchesPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="space-y-2 sm:col-span-2 xl:col-span-2">
+              <Label>Search</Label>
+              <Input
+                value={filters.search}
+                onChange={(event) => updateFilter("search", event.target.value)}
+                placeholder="Player, location, expansion, notes"
+              />
+            </div>
             <FilterSelect
               label="Expansion"
               value={filters.expansionId}
@@ -186,7 +196,7 @@ export function MatchesPage() {
               options={[2, 3, 4, 5, 6].map((count) => ({ value: String(count), label: `${count} players` }))}
               allLabel="All counts"
             />
-            <div className="space-y-2">
+            <div className="space-y-2 xl:col-start-5">
               <Label>Date from</Label>
               <Input
                 type="date"
@@ -279,6 +289,17 @@ export function MatchesPage() {
 
 function filterMatches(matches: Match[], filters: MatchFilters) {
   return matches.filter((match) => {
+    const search = filters.search.trim().toLowerCase();
+    if (search) {
+      const haystack = [
+        match.locationName,
+        match.expansionName,
+        match.createdByName,
+        match.notes ?? "",
+        ...match.players.map((player) => player.playerName),
+      ].join(" ").toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
     if (filters.expansionId !== "all" && match.expansionId !== filters.expansionId) return false;
     if (filters.locationId !== "all" && match.locationId !== filters.locationId) return false;
     if (filters.playerCount !== "all" && String(match.players.length) !== filters.playerCount) return false;
@@ -576,17 +597,24 @@ function HistoryMatchCard({
             </Badge>
           )}
           {canDelete && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:text-destructive"
-              onClick={onDelete}
-              disabled={deleting}
-              aria-label="Delete match"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" asChild>
+                <Link to={`/matches/${match.id}/edit`} aria-label="Edit match">
+                  <Pencil className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={onDelete}
+                disabled={deleting}
+                aria-label="Delete match"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
       </div>
