@@ -169,6 +169,7 @@ public class MatchService {
 
         matchRepository.saveAndFlush(match);
         recomputeAllRatings();
+        achievementService.recomputeAll(matchRepository.findAllWithPlayersOrderByPlayedAtAsc());
 
         return matchRepository.findByIdWithDetails(match.getId())
                 .map(MatchResponse::from)

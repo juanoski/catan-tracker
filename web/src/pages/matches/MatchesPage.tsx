@@ -63,18 +63,20 @@ const DEFAULT_FILTERS = {
   dateTo: "",
 };
 
+const MATCH_PAGE_STEP = 25;
 type MatchFilters = typeof DEFAULT_FILTERS;
 type ChartRow = { label: string; value: number; display?: string; color?: string };
 
 export function MatchesPage() {
   const { user } = useAuth();
   const [filters, setFilters] = useState<MatchFilters>({ ...DEFAULT_FILTERS });
+  const [matchLimit, setMatchLimit] = useState(MATCH_PAGE_STEP);
 
   const { data: matchPage, isPending: loadingMatches } = useQuery({
-    queryKey: ["matches", "history"],
+    queryKey: ["matches", "history", matchLimit],
     queryFn: () =>
       api
-        .get<PageResponse<Match>>("/matches?size=100&sort=playedAt,desc")
+        .get<PageResponse<Match>>(`/matches?size=${matchLimit}&sort=playedAt,desc`)
         .then((r) => r.data),
   });
 
@@ -111,6 +113,8 @@ export function MatchesPage() {
   const summary = useMemo(() => buildSummary(filteredMatches), [filteredMatches]);
   const chartData = useMemo(() => buildChartData(filteredMatches), [filteredMatches]);
   const dateFilterInvalid = Boolean(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
+  const totalMatches = matchPage?.totalElements ?? matches.length;
+  const hasMoreMatches = matches.length < totalMatches;
 
   function updateFilter<K extends keyof MatchFilters>(key: K, value: MatchFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -220,7 +224,7 @@ export function MatchesPage() {
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={Swords} title="Filtered matches" value={filteredMatches.length} subtitle={`${matches.length} loaded`} />
+        <SummaryCard icon={Swords} title="Filtered matches" value={filteredMatches.length} subtitle={`${matches.length} of ${totalMatches} loaded`} />
         <SummaryCard icon={Crown} title="Top winner" value={summary.topWinner?.name ?? "-"} subtitle={summary.topWinner ? `${summary.topWinner.wins} wins` : "No wins yet"} />
         <SummaryCard icon={Clock3} title="Average time" value={summary.averageDuration ? `${summary.averageDuration} min` : "-"} subtitle="Timed matches only" />
         <SummaryCard icon={MapPin} title="Top location" value={summary.topLocation?.name ?? "-"} subtitle={summary.topLocation ? `${summary.topLocation.matches} matches` : "No matches yet"} />
@@ -266,20 +270,44 @@ export function MatchesPage() {
               <Skeleton key={index} className="h-28 rounded-lg" />
             ))
           ) : filteredMatches.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">No matches found for these filters.</p>
-            </div>
+            <>
+              <div className="text-center py-12 text-muted-foreground">
+                <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No matches found in the loaded history for these filters.</p>
+              </div>
+              {hasMoreMatches && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
+                >
+                  Load more matches
+                </Button>
+              )}
+            </>
           ) : (
-            filteredMatches.map((match) => (
-              <HistoryMatchCard
-                key={match.id}
-                match={match}
-                currentUserId={user?.playerId ?? ""}
-                onDelete={() => handleDelete(match)}
-                deleting={deleteMutation.isPending && deleteMutation.variables === match.id}
-              />
-            ))
+            <>
+              {filteredMatches.map((match) => (
+                <HistoryMatchCard
+                  key={match.id}
+                  match={match}
+                  currentUserId={user?.playerId ?? ""}
+                  onDelete={() => handleDelete(match)}
+                  deleting={deleteMutation.isPending && deleteMutation.variables === match.id}
+                />
+              ))}
+              {hasMoreMatches && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
+                >
+                  Load more matches
+                </Button>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

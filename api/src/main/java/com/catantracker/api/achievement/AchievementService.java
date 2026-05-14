@@ -38,6 +38,14 @@ public class AchievementService {
         }
     }
 
+    @Transactional
+    public void recomputeAll(List<Match> matches) {
+        playerAchievementRepository.deleteAll();
+        for (Match match : matches) {
+            evaluateAfterMatch(match);
+        }
+    }
+
     private boolean qualifies(MatchPlayer mp, Match match, Achievement achievement) {
         int threshold = Integer.parseInt(achievement.getCriteriaValue());
         return switch (achievement.getCriteriaType()) {
