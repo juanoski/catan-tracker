@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { Layout } from "@/components/layout/Layout";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
+import { AchievementsPage } from "@/pages/achievements/AchievementsPage";
 import { UsersPage } from "@/pages/admin/UsersPage";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { LeaderboardPage } from "@/pages/leaderboard/LeaderboardPage";
@@ -21,6 +22,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/achievements" element={<AchievementsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/new" element={<LogMatchPage />} />

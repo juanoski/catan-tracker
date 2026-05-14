@@ -100,6 +100,16 @@ export interface PlayerAchievement {
   unlockedAt: string;
 }
 
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  iconName: string;
+  category: string;
+  criteriaType: string;
+  criteriaValue: string;
+}
+
 export interface PlayerStats {
   playerId: string;
   playerName: string;
