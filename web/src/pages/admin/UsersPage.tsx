@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2, Pencil, PlusCircle, Shield, Trash2, UserRound } from "lucide-react";
+import { KeyRound, Loader2, Pencil, PlusCircle, Shield, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -50,13 +50,23 @@ const editSchema = z.object({
   role: z.enum(["ADMIN", "PLAYER"]),
 });
 
+const resetPasswordSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+}).refine((value) => value.password === value.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "Passwords must match",
+});
+
 type CreateFormValues = z.infer<typeof createSchema>;
 type EditFormValues = z.infer<typeof editSchema>;
+type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 
 export function UsersPage() {
   const { user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Player | null>(null);
+  const [resetTarget, setResetTarget] = useState<Player | null>(null);
 
   const { data: players = [], isPending } = useQuery({
     queryKey: ["players"],
@@ -127,6 +137,18 @@ export function UsersPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
+                      title={`Reset password for ${player.name}`}
+                      aria-label={`Reset password for ${player.name}`}
+                      onClick={() => setResetTarget(player)}
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title={`Edit ${player.name}`}
+                      aria-label={`Edit ${player.name}`}
                       onClick={() => setEditTarget(player)}
                     >
                       <Pencil className="h-4 w-4" />
@@ -135,6 +157,8 @@ export function UsersPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:text-destructive"
+                      title={`Delete ${player.name}`}
+                      aria-label={`Delete ${player.name}`}
                       onClick={() => handleDelete(player)}
                       disabled={deleteMutation.isPending && deleteMutation.variables === player.id}
                     >
@@ -165,6 +189,14 @@ export function UsersPage() {
         }}
         player={editTarget ?? undefined}
         isSelf={editTarget?.id === user?.playerId}
+      />
+
+      <ResetPasswordDialog
+        open={!!resetTarget}
+        onOpenChange={(open) => {
+          if (!open) setResetTarget(null);
+        }}
+        player={resetTarget ?? undefined}
       />
     </div>
   );
@@ -312,6 +344,108 @@ function EditUserDialog({
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ResetPasswordDialog({
+  open,
+  onOpenChange,
+  player,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  player?: Player;
+}) {
+  const form = useForm<ResetPasswordFormValues>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: {
+      password: "",
+      confirmPassword: "",
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        password: "",
+        confirmPassword: "",
+      });
+    }
+  }, [form, open, player]);
+
+  const mutation = useMutation({
+    mutationFn: (data: ResetPasswordFormValues) => {
+      if (!player) return Promise.reject(new Error("No player selected"));
+      const payload: AdminUpdatePlayerRequest = {
+        password: data.password,
+      };
+      return api.patch<Player>(`/admin/players/${player.id}`, payload);
+    },
+    onSuccess: () => {
+      toast.success("Password reset");
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: (error: unknown) => {
+      const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg ?? "Failed to reset password");
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reset password</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="space-y-4">
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <p className="font-medium">{player?.name}</p>
+              <p className="text-muted-foreground">{player?.email}</p>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="At least 8 characters" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="Repeat new password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Reset password
               </Button>
             </DialogFooter>
           </form>
