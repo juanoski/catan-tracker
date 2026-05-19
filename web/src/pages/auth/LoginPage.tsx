@@ -48,13 +48,13 @@ export function LoginPage() {
         <div className="text-center mb-8">
           <HexLogo className="h-14 w-14 mx-auto text-primary mb-3" />
           <h1 className="text-3xl font-bold text-primary tracking-tight">Catan Tracker</h1>
-          <p className="text-muted-foreground text-sm mt-1">Track your dominion</p>
+          <p className="text-muted-foreground text-sm mt-1">Track matches, ELO, and bragging rights</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Welcome back</CardTitle>
-            <CardDescription>Sign in to your account</CardDescription>
+            <CardDescription>Sign in to continue tracking your league.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -79,7 +79,7 @@ export function LoginPage() {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
+                        <Input type="password" placeholder="Password" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

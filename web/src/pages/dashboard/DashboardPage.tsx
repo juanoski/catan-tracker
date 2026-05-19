@@ -58,11 +58,11 @@ export function DashboardPage() {
                     </Badge>
                   </Link>
                   <Link to={`/players/${myEntry.playerId}`} className="text-primary-foreground/80 text-sm hover:underline">
-                    #{myEntry.rank} ranked / {myEntry.wins}W / {myEntry.matchesPlayed - myEntry.wins}L
+                    Rank #{myEntry.rank} - {myEntry.wins}W - {myEntry.matchesPlayed - myEntry.wins}L
                   </Link>
                 </>
               ) : (
-                <span className="text-primary-foreground/60 text-sm">No matches yet - start logging!</span>
+                <span className="text-primary-foreground/60 text-sm">No matches yet. Log one to start your stats.</span>
               )}
             </div>
           </div>
@@ -95,15 +95,15 @@ export function DashboardPage() {
           icon={Flame}
           title="Current win streak"
           value={pulse.winStreak?.playerName ?? "-"}
-          subtitle={pulse.winStreak ? `${pulse.winStreak.count} wins in a row` : "No streak yet"}
+          subtitle={pulse.winStreak ? `${pulse.winStreak.count} wins in a row` : "No current streak"}
           href={pulse.winStreak ? `/players/${pulse.winStreak.playerId}` : undefined}
           loading={loadingMatches}
         />
         <PulseCard
           icon={TrendingDown}
-          title="Current lose streak"
+          title="Current loss streak"
           value={pulse.loseStreak?.playerName ?? "-"}
-          subtitle={pulse.loseStreak ? `${pulse.loseStreak.count} losses in a row` : "No streak yet"}
+          subtitle={pulse.loseStreak ? `${pulse.loseStreak.count} losses in a row` : "No current streak"}
           href={pulse.loseStreak ? `/players/${pulse.loseStreak.playerId}` : undefined}
           loading={loadingMatches}
         />
@@ -176,10 +176,10 @@ export function DashboardPage() {
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Swords className="h-4 w-4 text-accent" />
-                Recent Matches
+                Recent matches
               </CardTitle>
               <Button asChild variant="outline" size="sm">
-                <Link to="/matches">View all</Link>
+                <Link to="/matches">Open history</Link>
               </Button>
             </div>
           </CardHeader>
@@ -194,7 +194,7 @@ export function DashboardPage() {
                   <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
                   <p className="text-sm">No matches logged yet.</p>
                   <Button asChild variant="link" size="sm" className="mt-1">
-                    <Link to="/matches/new">Log the first one!</Link>
+                    <Link to="/matches/new">Log the first match</Link>
                   </Button>
                 </div>
               )
@@ -236,7 +236,7 @@ function LeaderboardRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolea
         <Link to={`/players/${entry.playerId}`} className="block truncate text-sm font-medium hover:underline">
           {entry.playerName}{isMe && " (you)"}
         </Link>
-        <p className="text-xs text-muted-foreground">{entry.matchesPlayed}G / {winRate}% WR</p>
+        <p className="text-xs text-muted-foreground">{entry.matchesPlayed} matches - {winRate}% win rate</p>
       </div>
       <Badge variant="outline" className="text-xs font-bold shrink-0">
         {entry.eloRating}
@@ -373,7 +373,7 @@ function MatchCard({ match, currentUserId }: { match: Match; currentUserId: stri
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">
-            {format(new Date(match.playedAt), "MMM d, yyyy")} / {match.locationName} /{" "}
+            {format(new Date(match.playedAt), "MMM d, yyyy")} - {match.locationName} -{" "}
             {match.expansionName}
           </p>
           {winner && (

@@ -81,7 +81,7 @@ export function UsersPage() {
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to delete user");
+      toast.error(msg ?? "Could not delete user");
     },
   });
 
@@ -101,7 +101,7 @@ export function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Users</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Admin-managed accounts for players and other admins
+            Manage player accounts, roles, and password resets.
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
@@ -206,7 +206,7 @@ function RoleBadge({ role }: { role: PlayerRole }) {
   return (
     <Badge variant={role === "ADMIN" ? "accent" : "secondary"} className="text-xs flex items-center gap-1">
       {role === "ADMIN" ? <Shield className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
-      {role}
+      {role === "ADMIN" ? "Admin" : "Player"}
     </Badge>
   );
 }
@@ -245,7 +245,7 @@ function CreateUserDialog({
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to create user");
+      toast.error(msg ?? "Could not create user");
     },
   });
 
@@ -324,7 +324,7 @@ function EditUserDialog({
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to update user");
+      toast.error(msg ?? "Could not update user");
     },
   });
 
@@ -394,7 +394,7 @@ function ResetPasswordDialog({
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to reset password");
+      toast.error(msg ?? "Could not reset password");
     },
   });
 
@@ -509,8 +509,8 @@ function UserFormFields<T extends CreateFormValues | EditFormValues>({
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="PLAYER">PLAYER</SelectItem>
-                <SelectItem value="ADMIN">ADMIN</SelectItem>
+                <SelectItem value="PLAYER">Player</SelectItem>
+                <SelectItem value="ADMIN">Admin</SelectItem>
               </SelectContent>
             </Select>
             {isSelf && (

@@ -104,7 +104,7 @@ export function MatchesPage() {
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to delete match");
+      toast.error(msg ?? "Could not delete match");
     },
   });
 
@@ -138,7 +138,7 @@ export function MatchesPage() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Matches</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Browse match history, filter game nights, and spot the current storylines.
+            Browse match history, filter game nights, and compare player trends.
           </p>
         </div>
         <Button asChild>
@@ -158,7 +158,7 @@ export function MatchesPage() {
             </CardTitle>
             <Button variant="outline" size="sm" onClick={() => setFilters({ ...DEFAULT_FILTERS })}>
               <RotateCcw className="mr-1.5 h-4 w-4" />
-              Clear
+              Reset filters
             </Button>
           </div>
         </CardHeader>
@@ -201,7 +201,7 @@ export function MatchesPage() {
               allLabel="All counts"
             />
             <div className="space-y-2 xl:col-start-5">
-              <Label>Date from</Label>
+              <Label>From</Label>
               <Input
                 type="date"
                 value={filters.dateFrom}
@@ -209,7 +209,7 @@ export function MatchesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Date to</Label>
+              <Label>To</Label>
               <Input
                 type="date"
                 value={filters.dateTo}
@@ -218,7 +218,7 @@ export function MatchesPage() {
             </div>
           </div>
           {dateFilterInvalid && (
-            <p className="text-sm text-destructive mt-3">Date from must be before date to.</p>
+            <p className="text-sm text-destructive mt-3">The start date must be before the end date.</p>
           )}
         </CardContent>
       </Card>
@@ -226,7 +226,7 @@ export function MatchesPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard icon={Swords} title="Filtered matches" value={filteredMatches.length} subtitle={`${matches.length} of ${totalMatches} loaded`} />
         <SummaryCard icon={Crown} title="Top winner" value={summary.topWinner?.name ?? "-"} subtitle={summary.topWinner ? `${summary.topWinner.wins} wins` : "No wins yet"} />
-        <SummaryCard icon={Clock3} title="Average time" value={summary.averageDuration ? `${summary.averageDuration} min` : "-"} subtitle="Timed matches only" />
+        <SummaryCard icon={Clock3} title="Average duration" value={summary.averageDuration ? `${summary.averageDuration} min` : "-"} subtitle="Matches with a duration" />
         <SummaryCard icon={MapPin} title="Top location" value={summary.topLocation?.name ?? "-"} subtitle={summary.topLocation ? `${summary.topLocation.matches} matches` : "No matches yet"} />
       </div>
 
@@ -246,12 +246,12 @@ export function MatchesPage() {
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              <HorizontalBarChart title="Wins by player" rows={chartData.winsByPlayer} emptyText="No wins in this filter set." />
-              <HorizontalBarChart title="Win rate by player" rows={chartData.winRateByPlayer} suffix="%" emptyText="No player results yet." />
-              <HorizontalBarChart title="Matches by location" rows={chartData.matchesByLocation} emptyText="No locations in this filter set." />
+              <HorizontalBarChart title="Wins by player" rows={chartData.winsByPlayer} emptyText="No wins match these filters." />
+              <HorizontalBarChart title="Win rate by player" rows={chartData.winRateByPlayer} suffix="%" emptyText="No player results match these filters." />
+              <HorizontalBarChart title="Matches by location" rows={chartData.matchesByLocation} emptyText="No locations match these filters." />
               <HorizontalBarChart title="Average points" rows={chartData.averagePointsByPlayer} emptyText="No player scores yet." />
-              <HorizontalBarChart title="Wins by color" rows={chartData.winsByColor} emptyText="No color wins yet." />
-              <HorizontalBarChart title="Average duration" rows={chartData.averageDurationByExpansion} suffix=" min" emptyText="No timed matches yet." />
+              <HorizontalBarChart title="Wins by color" rows={chartData.winsByColor} emptyText="No color wins match these filters." />
+              <HorizontalBarChart title="Average duration" rows={chartData.averageDurationByExpansion} suffix=" min" emptyText="No timed matches match these filters." />
             </div>
           )}
         </CardContent>
@@ -273,7 +273,7 @@ export function MatchesPage() {
             <>
               <div className="text-center py-12 text-muted-foreground">
                 <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">No matches found in the loaded history for these filters.</p>
+                <p className="text-sm">No loaded matches match these filters.</p>
               </div>
               {hasMoreMatches && (
                 <Button
@@ -282,7 +282,7 @@ export function MatchesPage() {
                   className="w-full"
                   onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
                 >
-                  Load more matches
+                  Load more history
                 </Button>
               )}
             </>
@@ -304,7 +304,7 @@ export function MatchesPage() {
                   className="w-full"
                   onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
                 >
-                  Load more matches
+                  Load more history
                 </Button>
               )}
             </>
@@ -608,13 +608,13 @@ function HistoryMatchCard({
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             <Link to={`/matches/${match.id}`} className="hover:underline">
-              {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} / {match.locationName} / {match.expansionName}
+              {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} - {match.locationName} - {match.expansionName}
             </Link>
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Logged by {match.createdByName}
-            {match.durationMinutes ? ` / ${match.durationMinutes} min` : ""}
-            {match.deckLayout ? ` / ${match.deckLayout} board` : ""}
+            {match.durationMinutes ? ` - ${match.durationMinutes} min` : ""}
+            {match.deckLayout ? ` - ${match.deckLayout} board` : ""}
           </p>
         </div>
 

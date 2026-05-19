@@ -49,7 +49,7 @@ export function MatchDetailPage() {
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Failed to delete match");
+      toast.error(msg ?? "Could not delete match");
     },
   });
 
@@ -111,7 +111,7 @@ export function MatchDetailPage() {
               variant="destructive"
               size="sm"
               onClick={() => {
-                if (confirm("Delete this match?")) deleteMutation.mutate(match.id);
+                if (confirm("Delete this match? ELO will be recalculated.")) deleteMutation.mutate(match.id);
               }}
               disabled={deleteMutation.isPending}
             >
@@ -133,7 +133,7 @@ export function MatchDetailPage() {
                 {winner && <Badge variant="accent">{winner.points} pts</Badge>}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} / {match.expansionName}
+                {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} - {match.expansionName}
               </p>
               <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5" />

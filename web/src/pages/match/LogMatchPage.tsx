@@ -135,12 +135,12 @@ export function LogMatchPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["matches"] });
       queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
-      toast.success(isEditing ? "Match updated! ELO recalculated." : "Match logged! ELO updated.");
+      toast.success(isEditing ? "Match updated. ELO recalculated." : "Match logged. ELO updated.");
       navigate(isEditing && matchId ? `/matches/${matchId}` : "/");
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? (isEditing ? "Failed to update match" : "Failed to log match"));
+      toast.error(msg ?? (isEditing ? "Could not update match" : "Could not log match"));
     },
   });
 
@@ -166,7 +166,7 @@ export function LogMatchPage() {
       return;
     }
     if (fields.length >= 6) {
-      toast.error("Maximum 6 players");
+      toast.error("A match can have up to 6 players");
       return;
     }
 
@@ -188,9 +188,9 @@ export function LogMatchPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-primary">{isEditing ? "Edit Match" : "Log a Match"}</h1>
+        <h1 className="text-2xl font-bold text-primary">{isEditing ? "Edit match" : "Log match"}</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {isEditing ? "Update the result and recalculate ELO" : "Record the results and update everyone's ELO"}
+          {isEditing ? "Update the result and recalculate ELO." : "Record the result and update everyone's ELO."}
         </p>
       </div>
 
@@ -270,7 +270,7 @@ export function LogMatchPage() {
                   name="durationMinutes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Duration (min) <span className="text-muted-foreground font-normal">- optional</span></FormLabel>
+                      <FormLabel>Duration <span className="text-muted-foreground font-normal">(minutes, optional)</span></FormLabel>
                       <FormControl>
                         <Input type="number" min={0} placeholder="e.g. 90" {...field} />
                       </FormControl>
@@ -309,9 +309,9 @@ export function LogMatchPage() {
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Notes <span className="text-muted-foreground font-normal">- optional</span></FormLabel>
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Anything memorable about this game?" rows={2} {...field} />
+                      <Textarea placeholder="Add a quick note about this game" rows={2} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -399,7 +399,7 @@ export function LogMatchPage() {
             disabled={mutation.isPending}
           >
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? "Save changes & recalculate ELO" : "Save match & update ELO"}
+            {isEditing ? "Save changes and recalculate ELO" : "Save match and update ELO"}
           </Button>
         </form>
       </Form>

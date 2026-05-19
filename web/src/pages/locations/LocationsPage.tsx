@@ -60,7 +60,7 @@ export function LocationsPage() {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       toast.success("Location deleted");
     },
-    onError: () => toast.error("Failed to delete location"),
+    onError: () => toast.error("Could not delete location"),
   });
 
   function handleEdit(location: Location) {
@@ -79,7 +79,7 @@ export function LocationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Locations</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Places where matches are played
+            Manage the places where matches are played.
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
@@ -98,7 +98,7 @@ export function LocationsPage() {
         <div className="text-center py-16 text-muted-foreground">
           <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="font-medium">No locations yet</p>
-          <p className="text-sm mt-1">Add the first place you play Catan</p>
+          <p className="text-sm mt-1">Add a place before logging matches there.</p>
           <Button className="mt-4" onClick={() => setCreateOpen(true)}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Add location
@@ -221,7 +221,7 @@ function LocationDialog({
       form.reset();
       onSaved();
     },
-    onError: () => toast.error("Failed to save location"),
+    onError: () => toast.error("Could not save location"),
   });
 
   return (
@@ -276,7 +276,7 @@ function LocationDialog({
                 <FormItem>
                   <FormLabel>
                     Address{" "}
-                    <span className="text-muted-foreground font-normal">— optional</span>
+                    <span className="text-muted-foreground font-normal">(optional)</span>
                   </FormLabel>
                   <FormControl>
                     <Input placeholder="Street address" {...field} />

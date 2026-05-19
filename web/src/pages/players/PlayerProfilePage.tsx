@@ -139,7 +139,9 @@ export function PlayerProfilePage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-bold text-primary">{playerName}</h1>
-                  <Badge variant={player.role === "ADMIN" ? "accent" : "secondary"}>{player.role}</Badge>
+                  <Badge variant={player.role === "ADMIN" ? "accent" : "secondary"}>
+                    {player.role === "ADMIN" ? "Admin" : "Player"}
+                  </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">{player.email}</p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -274,7 +276,7 @@ function buildColorRows(stats?: PlayerStats): ChartRow[] {
       return {
         label: formatColorName(color),
         value: Number(matches),
-        display: `${matches} games / ${wins} wins`,
+        display: `${matches} matches - ${wins} wins`,
         color: CATAN_COLOR_HEX[color.toLowerCase()] ?? "#94a3b8",
       };
     })
@@ -374,10 +376,10 @@ function RecentMatchCard({ match, playerId }: { match: Match; playerId: string }
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-medium">
-            {entry?.winner ? "Win" : "Loss"} / {format(new Date(match.playedAt), "MMM d, yyyy")}
+            {entry?.winner ? "Win" : "Loss"} - {format(new Date(match.playedAt), "MMM d, yyyy")}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            {match.locationName} / {match.expansionName} / winner: {winner?.playerName ?? "-"}
+            {match.locationName} - {match.expansionName} - winner: {winner?.playerName ?? "-"}
           </p>
         </div>
         {entry && (
@@ -412,7 +414,7 @@ function MatchupCard({
         {matchup.opponentName}
       </Link>
       <p className="text-sm text-muted-foreground mt-1">
-        {matchup.wins}-{matchup.losses} / {winRate}% win rate
+        {matchup.wins}-{matchup.losses} - {winRate}% win rate
       </p>
     </div>
   );

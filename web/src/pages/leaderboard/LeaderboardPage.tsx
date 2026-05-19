@@ -29,7 +29,7 @@ export function LeaderboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-primary">Leaderboard</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          The full table: ELO, wins, losses, win rate, and profile links.
+          Compare ELO, match volume, wins, losses, and win rate.
         </p>
       </div>
 
@@ -70,9 +70,9 @@ export function LeaderboardPage() {
               ))}
             </div>
           ) : isError ? (
-            <div className="py-12 text-center text-sm text-destructive">Could not load leaderboard.</div>
+            <div className="py-12 text-center text-sm text-destructive">Could not load the leaderboard.</div>
           ) : leaderboard.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">No ranked players yet.</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">No ranked players yet. Log a match to start the table.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">

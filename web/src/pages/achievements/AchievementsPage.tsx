@@ -65,7 +65,7 @@ export function AchievementsPage() {
       <div>
         <h1 className="text-2xl font-bold text-primary">Achievements</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          See every achievement and which players have unlocked each one.
+          See every achievement and who has unlocked it.
         </p>
       </div>
 
@@ -80,7 +80,7 @@ export function AchievementsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <Search className="h-4 w-4 text-accent" />
-              Browse
+              Achievement list
             </CardTitle>
             <Input
               value={search}
@@ -96,7 +96,7 @@ export function AchievementsPage() {
               {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-36 rounded-lg" />)}
             </div>
           ) : filteredAchievements.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">No achievements found.</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">No achievements match your search.</div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {filteredAchievements.map((achievement) => {
@@ -119,7 +119,7 @@ export function AchievementsPage() {
 
                       {unlockedBy.length === 0 ? (
                         <div className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                          No players have unlocked this yet.
+                          No one has unlocked this yet.
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
@@ -145,7 +145,7 @@ export function AchievementsPage() {
           )}
           {!loadingUnlocks && totalUnlocks === 0 && achievements.length > 0 && (
             <p className="mt-4 text-center text-sm text-muted-foreground">
-              No achievements have been unlocked yet.
+              No achievements have been unlocked yet. They will appear here after matches are logged.
             </p>
           )}
         </CardContent>

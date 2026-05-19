@@ -35,12 +35,12 @@ export function RegisterPage() {
       api.post<AuthResponse>("/auth/register", data).then((r) => r.data),
     onSuccess: (data) => {
       login(data);
-      toast.success(`Welcome, ${data.name}! Your journey begins.`);
+      toast.success(`Welcome, ${data.name}. Your account is ready.`);
       navigate("/");
     },
     onError: (error: unknown) => {
       const msg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? "Registration failed");
+      toast.error(msg ?? "Could not create account");
     },
   });
 
@@ -56,7 +56,7 @@ export function RegisterPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Create account</CardTitle>
-            <CardDescription>Join and start tracking your Catan glory</CardDescription>
+            <CardDescription>Create your player profile and start tracking matches.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -68,7 +68,7 @@ export function RegisterPage() {
                     <FormItem>
                       <FormLabel>Display name</FormLabel>
                       <FormControl>
-                        <Input placeholder="The Settler" {...field} />
+                        <Input placeholder="Player name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
