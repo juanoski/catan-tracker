@@ -22,13 +22,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class MatchService {
+    private static final Set<String> ALLOWED_COLORS = Set.of("red", "blue", "white", "orange", "green", "brown");
 
     private final MatchRepository matchRepository;
     private final MatchPlayerRepository matchPlayerRepository;
@@ -187,10 +191,70 @@ public class MatchService {
     }
 
     private void validatePlayers(CreateMatchRequest req) {
+        if (req.playedAt() != null && req.playedAt().isAfter(LocalDateTime.now().plusMinutes(5))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Match date cannot be in the future");
+        }
+
+        String deckLayout = req.deckLayout() != null ? req.deckLayout() : "single";
+        int playerCount = req.players().size();
+        if ("single".equals(deckLayout) && playerCount > 4) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Single board matches can have up to 4 players");
+        }
+        if ("double".equals(deckLayout) && playerCount < 5) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Double board matches require at least 5 players");
+        }
+
+        Set<UUID> playerIds = new HashSet<>();
+        Set<String> colors = new HashSet<>();
+        int highestPoints = req.players().stream().mapToInt(p -> p.points()).max().orElse(0);
+
+        for (var player : req.players()) {
+            if (!playerIds.add(player.playerId())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Each player can only appear once in a match");
+            }
+
+            String color = player.color().trim().toLowerCase();
+            if (!ALLOWED_COLORS.contains(color)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid player color: " + player.color());
+            }
+            if (!colors.add(color)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Each player must use a different color");
+            }
+        }
+
         long winnerCount = req.players().stream().filter(p -> p.winner()).count();
         if (winnerCount != 1) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Exactly one player must be marked as winner");
         }
+
+        var winner = req.players().stream().filter(p -> p.winner()).findFirst().orElseThrow();
+        if (winner.points() < highestPoints) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The winner must have the highest point total");
+        }
+
+        long longestRoadCount = req.players().stream().filter(p -> p.longestRoad()).count();
+        if (longestRoadCount > 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only one player can have Longest Road");
+        }
+
+        long largestArmyCount = req.players().stream().filter(p -> p.largestArmy()).count();
+        if (largestArmyCount > 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only one player can have Largest Army");
+        }
+
+        req.players().stream()
+                .filter(p -> p.longestRoad() && p.points() < 2)
+                .findFirst()
+                .ifPresent(p -> {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "Longest Road requires at least 2 points");
+                });
+
+        req.players().stream()
+                .filter(p -> p.largestArmy() && p.points() < 2)
+                .findFirst()
+                .ifPresent(p -> {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "Largest Army requires at least 2 points");
+                });
     }
 
     private void recomputeAllRatings() {

@@ -28,31 +28,137 @@ const CATAN_COLORS = [
   { value: "green", label: "Green", hex: "#16a34a" },
   { value: "brown", label: "Brown", hex: "#92400e" },
 ];
+const CATAN_COLOR_VALUES = CATAN_COLORS.map((color) => color.value);
+const MAX_MATCH_DURATION_MINUTES = 720;
 
 const playerSchema = z.object({
   playerId: z.string().min(1, "Select a player"),
   color: z.string().min(1, "Select a color"),
-  points: z.coerce.number().min(0).max(20),
+  points: z.coerce.number().int("Points must be a whole number").min(0, "Points cannot be negative").max(20, "Points cannot be more than 20"),
   winner: z.boolean(),
   longestRoad: z.boolean(),
   largestArmy: z.boolean(),
 });
 
-const schema = z.object({
-  locationId: z.string().min(1, "Select a location"),
-  expansionId: z.string().min(1, "Select an expansion"),
-  playedAt: z.string().min(1, "Select date and time"),
-  durationMinutes: z.coerce.number().min(0).optional(),
-  deckLayout: z.enum(["single", "double"]),
-  notes: z.string().optional(),
-  players: z
-    .array(playerSchema)
-    .min(2, "At least 2 players required")
-    .max(6, "Maximum 6 players")
-    .refine((ps) => ps.filter((p) => p.winner).length === 1, {
-      message: "Exactly one player must be marked as winner",
-    }),
-});
+const schema = z
+  .object({
+    locationId: z.string().min(1, "Select a location"),
+    expansionId: z.string().min(1, "Select an expansion"),
+    playedAt: z.string().min(1, "Select date and time"),
+    durationMinutes: z.preprocess(
+      (value) => value === "" || value === null ? undefined : value,
+      z.coerce
+        .number()
+        .int("Duration must be a whole number")
+        .min(1, "Duration must be at least 1 minute")
+        .max(MAX_MATCH_DURATION_MINUTES, "Duration cannot be more than 12 hours")
+        .optional()
+    ),
+    deckLayout: z.enum(["single", "double"]),
+    notes: z.string().max(1000, "Notes must be 1000 characters or fewer").optional(),
+    players: z.array(playerSchema).min(2, "Add at least 2 players").max(6, "A match can have up to 6 players"),
+  })
+  .superRefine((data, ctx) => {
+    const playedAt = data.playedAt ? new Date(data.playedAt) : null;
+    if (playedAt && playedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["playedAt"],
+        message: "Match date cannot be in the future",
+      });
+    }
+
+    if (data.deckLayout === "single" && data.players.length > 4) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["deckLayout"],
+        message: "Single board matches can have up to 4 players",
+      });
+    }
+
+    if (data.deckLayout === "double" && data.players.length < 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["deckLayout"],
+        message: "Double board matches require at least 5 players",
+      });
+    }
+
+    const playerIds = data.players.map((player) => player.playerId).filter(Boolean);
+    if (playerIds.length !== new Set(playerIds).size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Each player can only appear once",
+      });
+    }
+
+    const colors = data.players.map((player) => player.color).filter(Boolean);
+    if (colors.some((color) => !CATAN_COLOR_VALUES.includes(color))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Choose a valid Catan color for every player",
+      });
+    }
+    if (colors.length !== new Set(colors).size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Each player must use a different color",
+      });
+    }
+
+    const winners = data.players.filter((player) => player.winner);
+    if (winners.length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Mark exactly one winner",
+      });
+    } else {
+      const highestPoints = Math.max(...data.players.map((player) => player.points));
+      if (winners[0].points < highestPoints) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["players"],
+          message: "The winner must have the highest point total",
+        });
+      }
+    }
+
+    if (data.players.filter((player) => player.longestRoad).length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Only one player can have Longest Road",
+      });
+    }
+
+    if (data.players.filter((player) => player.largestArmy).length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Only one player can have Largest Army",
+      });
+    }
+
+    if (data.players.some((player) => player.longestRoad && player.points < 2)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Longest Road requires at least 2 points",
+      });
+    }
+
+    if (data.players.some((player) => player.largestArmy && player.points < 2)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["players"],
+        message: "Largest Army requires at least 2 points",
+      });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -272,7 +378,7 @@ export function LogMatchPage() {
                     <FormItem>
                       <FormLabel>Duration <span className="text-muted-foreground font-normal">(minutes, optional)</span></FormLabel>
                       <FormControl>
-                        <Input type="number" min={0} placeholder="e.g. 90" {...field} />
+                        <Input type="number" min={1} max={MAX_MATCH_DURATION_MINUTES} placeholder="e.g. 90" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -294,7 +400,7 @@ export function LogMatchPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="single">Single board (3-4 players)</SelectItem>
+                          <SelectItem value="single">Single board (2-4 players)</SelectItem>
                           <SelectItem value="double">Double board (5-6 players)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -311,7 +417,7 @@ export function LogMatchPage() {
                   <FormItem>
                     <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Add a quick note about this game" rows={2} {...field} />
+                      <Textarea placeholder="Add a quick note about this game" rows={2} maxLength={1000} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -525,7 +631,7 @@ function PlayerRow({
             <FormItem className="flex-1 min-w-[80px]">
               <FormLabel className="text-xs">Points</FormLabel>
               <FormControl>
-                <Input type="number" min={0} max={20} className="h-9 text-sm" {...field} />
+                <Input type="number" min={0} max={20} step={1} className="h-9 text-sm" {...field} />
               </FormControl>
             </FormItem>
           )}
