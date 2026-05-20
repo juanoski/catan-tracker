@@ -29,6 +29,7 @@ const CATAN_COLORS = [
   { value: "brown", label: "Brown", hex: "#92400e" },
 ];
 const CATAN_COLOR_VALUES = CATAN_COLORS.map((color) => color.value);
+const MIN_WINNING_POINTS = 10;
 const MAX_MATCH_DURATION_MINUTES = 720;
 
 const playerSchema = z.object({
@@ -118,11 +119,26 @@ const schema = z
       });
     } else {
       const highestPoints = Math.max(...data.players.map((player) => player.points));
+      const topScoreCount = data.players.filter((player) => player.points === highestPoints).length;
+      if (winners[0].points < MIN_WINNING_POINTS) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["players"],
+          message: `Winner must have at least ${MIN_WINNING_POINTS} points`,
+        });
+      }
       if (winners[0].points < highestPoints) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["players"],
           message: "The winner must have the highest point total",
+        });
+      }
+      if (topScoreCount > 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["players"],
+          message: "The winner must have the unique highest point total",
         });
       }
     }
@@ -265,6 +281,7 @@ export function LogMatchPage() {
   const watchedPlayers = form.watch("players");
   const selectedPlayerIds = watchedPlayers.map((player) => player.playerId).filter(Boolean);
   const recentPlayers = getRecentPlayers(recentMatchPage?.content ?? [], players ?? []);
+  const playersError = getPlayersError(form.formState.errors.players);
 
   function addPlayer(playerId: string, preferredColor?: string) {
     if (selectedPlayerIds.includes(playerId)) {
@@ -451,9 +468,7 @@ export function LogMatchPage() {
                   Add player
                 </Button>
               </div>
-              {form.formState.errors.players?.root && (
-                <p className="text-sm text-destructive">{form.formState.errors.players.root.message}</p>
-              )}
+              {playersError && <p className="text-sm text-destructive">{playersError}</p>}
               {recentPlayers.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {recentPlayers.slice(0, 8).map((player) => (
@@ -633,6 +648,7 @@ function PlayerRow({
               <FormControl>
                 <Input type="number" min={0} max={20} step={1} className="h-9 text-sm" {...field} />
               </FormControl>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -707,4 +723,10 @@ function getRecentPlayers(matches: Match[], players: Player[]) {
   });
 
   return recent;
+}
+
+function getPlayersError(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const maybeError = error as { message?: string; root?: { message?: string } };
+  return maybeError.root?.message ?? maybeError.message ?? null;
 }

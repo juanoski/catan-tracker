@@ -33,6 +33,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MatchService {
     private static final Set<String> ALLOWED_COLORS = Set.of("red", "blue", "white", "orange", "green", "brown");
+    private static final int MIN_WINNING_POINTS = 10;
 
     private final MatchRepository matchRepository;
     private final MatchPlayerRepository matchPlayerRepository;
@@ -228,8 +229,15 @@ public class MatchService {
         }
 
         var winner = req.players().stream().filter(p -> p.winner()).findFirst().orElseThrow();
+        if (winner.points() < MIN_WINNING_POINTS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Winner must have at least 10 points");
+        }
         if (winner.points() < highestPoints) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "The winner must have the highest point total");
+        }
+        long topScoreCount = req.players().stream().filter(p -> p.points() == highestPoints).count();
+        if (topScoreCount > 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The winner must have the unique highest point total");
         }
 
         long longestRoadCount = req.players().stream().filter(p -> p.longestRoad()).count();
