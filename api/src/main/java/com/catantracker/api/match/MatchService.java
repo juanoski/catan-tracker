@@ -11,6 +11,7 @@ import com.catantracker.api.match.dto.CreateMatchRequest;
 import com.catantracker.api.match.dto.MatchResponse;
 import com.catantracker.api.player.Player;
 import com.catantracker.api.player.PlayerRepository;
+import com.catantracker.api.player.PlayerRole;
 import com.catantracker.api.player.PlayerService;
 import com.catantracker.api.rating.RatingHistory;
 import com.catantracker.api.rating.RatingHistoryRepository;
@@ -136,8 +137,8 @@ public class MatchService {
 
         Match match = matchRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Match not found"));
-        if (!match.getCreatedBy().getId().equals(requesterId)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Only the creator can edit this match");
+        if (!canManageMatch(match, requesterId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the creator or an admin can edit this match");
         }
 
         Location location = locationService.getEntityById(req.locationId());
@@ -185,10 +186,18 @@ public class MatchService {
     public void delete(UUID id, UUID requesterId) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Match not found"));
-        if (!match.getCreatedBy().getId().equals(requesterId)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Only the creator can delete this match");
+        if (!canManageMatch(match, requesterId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the creator or an admin can delete this match");
         }
         matchRepository.delete(match);
+    }
+
+    private boolean canManageMatch(Match match, UUID requesterId) {
+        if (match.getCreatedBy().getId().equals(requesterId)) {
+            return true;
+        }
+        Player requester = playerService.getEntityById(requesterId);
+        return requester.getRole() == PlayerRole.ADMIN;
     }
 
     private void validatePlayers(CreateMatchRequest req) {

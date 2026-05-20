@@ -26,7 +26,7 @@ const CATAN_COLOR_HEX: Record<string, string> = {
 export function MatchDetailPage() {
   const { matchId = "" } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   const { data: match, isPending } = useQuery({
     queryKey: ["matches", matchId],
@@ -79,7 +79,7 @@ export function MatchDetailPage() {
   }
 
   const winner = match.players.find((player) => player.winner);
-  const canDelete = match.createdById === user?.playerId;
+  const canManage = isAdmin || match.createdById === user?.playerId;
   const matchIndex = (matchPage?.content ?? []).findIndex((item) => item.id === match.id);
   const previousMatch = matchIndex >= 0 ? matchPage?.content[matchIndex + 1] : undefined;
   const nextMatch = matchIndex > 0 ? matchPage?.content[matchIndex - 1] : undefined;
@@ -99,7 +99,7 @@ export function MatchDetailPage() {
             <Link to={nextMatch ? `/matches/${nextMatch.id}` : "#"}>Next</Link>
           </Button>
         </div>
-        {canDelete && (
+        {canManage && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" asChild>
               <Link to={`/matches/${match.id}/edit`}>

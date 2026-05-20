@@ -68,7 +68,7 @@ type MatchFilters = typeof DEFAULT_FILTERS;
 type ChartRow = { label: string; value: number; display?: string; color?: string };
 
 export function MatchesPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [filters, setFilters] = useState<MatchFilters>({ ...DEFAULT_FILTERS });
   const [matchLimit, setMatchLimit] = useState(MATCH_PAGE_STEP);
 
@@ -121,8 +121,8 @@ export function MatchesPage() {
   }
 
   function handleDelete(match: Match) {
-    if (match.createdById !== user?.playerId) {
-      toast.error("Only the creator can delete this match");
+    if (!canManageMatch(match, user?.playerId, isAdmin)) {
+      toast.error("Only the creator or an admin can delete this match");
       return;
     }
 
@@ -293,6 +293,7 @@ export function MatchesPage() {
                   key={match.id}
                   match={match}
                   currentUserId={user?.playerId ?? ""}
+                  canManage={canManageMatch(match, user?.playerId, isAdmin)}
                   onDelete={() => handleDelete(match)}
                   deleting={deleteMutation.isPending && deleteMutation.variables === match.id}
                 />
@@ -580,17 +581,18 @@ function SummaryCard({
 function HistoryMatchCard({
   match,
   currentUserId,
+  canManage,
   onDelete,
   deleting,
 }: {
   match: Match;
   currentUserId: string;
+  canManage: boolean;
   onDelete: () => void;
   deleting: boolean;
 }) {
   const winner = match.players.find((player) => player.winner);
   const currentUserEntry = match.players.find((player) => player.playerId === currentUserId);
-  const canDelete = match.createdById === currentUserId;
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
@@ -624,7 +626,7 @@ function HistoryMatchCard({
               {winner.points} pts
             </Badge>
           )}
-          {canDelete && (
+          {canManage && (
             <>
               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" asChild>
                 <Link to={`/matches/${match.id}/edit`} aria-label="Edit match">
@@ -658,6 +660,10 @@ function HistoryMatchCard({
       )}
     </div>
   );
+}
+
+function canManageMatch(match: Match, currentUserId: string | undefined, isAdmin: boolean) {
+  return isAdmin || match.createdById === currentUserId;
 }
 
 function PlayerChip({
