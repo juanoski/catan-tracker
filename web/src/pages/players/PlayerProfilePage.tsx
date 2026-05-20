@@ -44,6 +44,16 @@ const CATAN_COLOR_HEX: Record<string, string> = {
 };
 
 type ChartRow = { label: string; value: number; display?: string; color?: string };
+type HeadToHeadRow = {
+  opponentId: string;
+  opponentName: string;
+  matches: number;
+  wins: number;
+  losses: number;
+  neutralResults: number;
+  pointsFor: number;
+  pointsAgainst: number;
+};
 
 export function PlayerProfilePage() {
   const { playerId = "" } = useParams();
@@ -84,6 +94,7 @@ export function PlayerProfilePage() {
   );
 
   const colorRows = useMemo(() => buildColorRows(stats), [stats]);
+  const headToHeadRows = useMemo(() => buildHeadToHeadRows(playerMatches, playerId), [playerMatches, playerId]);
   const playerName = stats?.playerName ?? player?.name ?? "Player";
   const initials = getInitials(playerName);
 
@@ -159,7 +170,7 @@ export function PlayerProfilePage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Swords} title="Matches" value={stats.totalMatches} subtitle={`${stats.totalWins} wins`} />
-        <StatCard icon={Trophy} title="Win rate" value={`${Math.round(stats.winRate)}%`} subtitle={`${stats.totalWins}/${stats.totalMatches || 0}`} />
+        <StatCard icon={Trophy} title="Win rate" value={formatWinRate(stats.winRate)} subtitle={`${stats.totalWins}/${stats.totalMatches || 0}`} />
         <StatCard icon={Target} title="Avg points" value={stats.avgPoints.toFixed(1)} subtitle={`High ${stats.highestPointsSingleGame}`} />
         <StatCard icon={Flame} title="Current streak" value={stats.currentWinStreak} subtitle={`Best ${stats.longestWinStreak}`} />
         <StatCard icon={Route} title="Longest Road" value={stats.longestRoadCount} subtitle="Times claimed" />
@@ -249,6 +260,58 @@ export function PlayerProfilePage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="h-4 w-4 text-accent" />
+            Head-to-head
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {headToHeadRows.length === 0 ? (
+            <EmptyPanel text="No head-to-head records yet." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Opponent</th>
+                    <th className="py-2 pr-3 font-medium">Matches</th>
+                    <th className="py-2 pr-3 font-medium">Record</th>
+                    <th className="py-2 pr-3 font-medium">Win rate</th>
+                    <th className="py-2 pr-3 font-medium">Avg points</th>
+                    <th className="py-2 pr-3 font-medium">Opponent avg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {headToHeadRows.map((row) => {
+                    const decided = row.wins + row.losses;
+                    const winRate = decided ? Math.round((row.wins / decided) * 100) : 0;
+                    return (
+                      <tr key={row.opponentId} className="border-b last:border-0">
+                        <td className="py-3 pr-3">
+                          <Link to={`/players/${row.opponentId}`} className="font-medium text-primary hover:underline">
+                            {row.opponentName}
+                          </Link>
+                        </td>
+                        <td className="py-3 pr-3">{row.matches}</td>
+                        <td className="py-3 pr-3">
+                          {row.wins}-{row.losses}
+                          {row.neutralResults > 0 && <span className="text-muted-foreground"> ({row.neutralResults} neutral)</span>}
+                        </td>
+                        <td className="py-3 pr-3">{decided ? `${winRate}%` : "-"}</td>
+                        <td className="py-3 pr-3">{(row.pointsFor / row.matches).toFixed(1)}</td>
+                        <td className="py-3 pr-3">{(row.pointsAgainst / row.matches).toFixed(1)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Crown className="h-4 w-4 text-accent" />
             Recent matches
           </CardTitle>
@@ -282,6 +345,47 @@ function buildColorRows(stats?: PlayerStats): ChartRow[] {
     })
     .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
+function buildHeadToHeadRows(matches: Match[], playerId: string): HeadToHeadRow[] {
+  const rows = new Map<string, HeadToHeadRow>();
+
+  matches.forEach((match) => {
+    const playerEntry = match.players.find((player) => player.playerId === playerId);
+    if (!playerEntry) return;
+
+    match.players.forEach((opponent) => {
+      if (opponent.playerId === playerId) return;
+
+      const current = rows.get(opponent.playerId) ?? {
+        opponentId: opponent.playerId,
+        opponentName: opponent.playerName,
+        matches: 0,
+        wins: 0,
+        losses: 0,
+        neutralResults: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+      };
+
+      rows.set(opponent.playerId, {
+        ...current,
+        opponentName: opponent.playerName,
+        matches: current.matches + 1,
+        wins: current.wins + (playerEntry.winner ? 1 : 0),
+        losses: current.losses + (!playerEntry.winner && opponent.winner ? 1 : 0),
+        neutralResults: current.neutralResults + (!playerEntry.winner && !opponent.winner ? 1 : 0),
+        pointsFor: current.pointsFor + playerEntry.points,
+        pointsAgainst: current.pointsAgainst + opponent.points,
+      });
+    });
+  });
+
+  return [...rows.values()].sort((a, b) =>
+    b.matches - a.matches ||
+    b.wins - a.wins ||
+    a.opponentName.localeCompare(b.opponentName)
+  );
 }
 
 function EloLineChart({
@@ -469,6 +573,10 @@ function EmptyPanel({ text }: { text: string }) {
 function formatColorName(color: string) {
   const trimmed = color.trim();
   return trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase() : "";
+}
+
+function formatWinRate(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function getInitials(name: string) {

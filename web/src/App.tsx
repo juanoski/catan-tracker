@@ -6,6 +6,7 @@ import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
 import { AchievementsPage } from "@/pages/achievements/AchievementsPage";
 import { UsersPage } from "@/pages/admin/UsersPage";
+import { PlayerComparePage } from "@/pages/compare/PlayerComparePage";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { LeaderboardPage } from "@/pages/leaderboard/LeaderboardPage";
 import { MatchDetailPage } from "@/pages/matches/MatchDetailPage";
@@ -23,6 +24,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/achievements" element={<AchievementsPage />} />
+          <Route path="/compare" element={<PlayerComparePage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/new" element={<LogMatchPage />} />
