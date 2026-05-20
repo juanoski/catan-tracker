@@ -1,16 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PlusCircle, Pencil, Trash2, MapPin, Loader2 } from "lucide-react";
+import { Crown, Percent, PlusCircle, Pencil, Trash2, MapPin, Loader2, Swords, Trophy } from "lucide-react";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -29,7 +29,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Location, Player } from "@/types/api";
+import type { Location, Match, PageResponse, Player } from "@/types/api";
 
 const schema = z.object({
   ownerId: z.string().min(1, "Select an owner"),
@@ -38,6 +38,13 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+type LocationStats = {
+  locationId: string;
+  locationName: string;
+  matches: number;
+  topWinner?: { playerId: string; playerName: string; wins: number };
+  bestWinRate?: { playerId: string; playerName: string; wins: number; matches: number; winRate: number };
+};
 
 export function LocationsPage() {
   const { user } = useAuth();
@@ -53,6 +60,20 @@ export function LocationsPage() {
     queryKey: ["players"],
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
+
+  const { data: matchPage, isPending: loadingMatches } = useQuery({
+    queryKey: ["matches", "location-stats"],
+    queryFn: () => api.get<PageResponse<Match>>("/matches?size=500&sort=playedAt,desc").then((r) => r.data),
+  });
+
+  const locationStats = useMemo(
+    () => buildLocationStats(locations ?? [], matchPage?.content ?? []),
+    [locations, matchPage?.content]
+  );
+  const busiestLocation = locationStats[0];
+  const bestWinRate = [...locationStats]
+    .flatMap((location) => location.bestWinRate ? [{ ...location.bestWinRate, locationName: location.locationName }] : [])
+    .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins || a.playerName.localeCompare(b.playerName))[0];
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/locations/${id}`),
@@ -87,6 +108,58 @@ export function LocationsPage() {
           Add location
         </Button>
       </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <SummaryCard
+          icon={Swords}
+          title="Tracked games"
+          value={locationStats.reduce((total, location) => total + location.matches, 0)}
+          subtitle={`${locationStats.filter((location) => location.matches > 0).length} active locations`}
+          loading={loadingMatches || isPending}
+        />
+        <SummaryCard
+          icon={MapPin}
+          title="Most games"
+          value={busiestLocation?.locationName ?? "-"}
+          subtitle={busiestLocation ? `${busiestLocation.matches} matches` : "No matches yet"}
+          loading={loadingMatches || isPending}
+        />
+        <SummaryCard
+          icon={Percent}
+          title="Best location rate"
+          value={bestWinRate?.playerName ?? "-"}
+          subtitle={bestWinRate ? `${Math.round(bestWinRate.winRate)}% at ${bestWinRate.locationName}` : "No wins yet"}
+          loading={loadingMatches || isPending}
+        />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Trophy className="h-4 w-4 text-accent" />
+            Location stats
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingMatches || isPending ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-lg" />)}
+            </div>
+          ) : locationStats.every((location) => location.matches === 0) ? (
+            <div className="flex min-h-32 items-center justify-center rounded-lg bg-muted/50 px-4 text-center text-sm text-muted-foreground">
+              No location stats yet. Log matches with locations to fill this in.
+            </div>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {locationStats
+                .filter((location) => location.matches > 0)
+                .map((stats) => (
+                  <LocationStatsCard key={stats.locationId} stats={stats} />
+                ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {isPending ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -182,6 +255,158 @@ export function LocationsPage() {
       />
     </div>
   );
+}
+
+function SummaryCard({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+  loading,
+}: {
+  icon: typeof Swords;
+  title: string;
+  value: string | number;
+  subtitle: string;
+  loading: boolean;
+}) {
+  if (loading) return <Skeleton className="h-24 rounded-xl" />;
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="mt-1 truncate text-2xl font-semibold">{value}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className="rounded-md bg-accent/15 p-2 text-accent">
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LocationStatsCard({ stats }: { stats: LocationStats }) {
+  return (
+    <Card className="bg-background">
+      <CardContent className="space-y-4 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 shrink-0 text-accent" />
+              <h2 className="truncate font-semibold">{stats.locationName}</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">{stats.matches} matches played here</p>
+          </div>
+          <Badge variant="outline" className="shrink-0">{stats.matches}</Badge>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-md border bg-card p-3">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Crown className="h-3.5 w-3.5 text-accent" />
+              Most common winner
+            </p>
+            {stats.topWinner ? (
+              <p className="mt-1 text-sm font-semibold">
+                {stats.topWinner.playerName}
+                <span className="ml-1 font-normal text-muted-foreground">({stats.topWinner.wins} wins)</span>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">No wins yet</p>
+            )}
+          </div>
+
+          <div className="rounded-md border bg-card p-3">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Percent className="h-3.5 w-3.5 text-accent" />
+              Highest win rate
+            </p>
+            {stats.bestWinRate ? (
+              <p className="mt-1 text-sm font-semibold">
+                {stats.bestWinRate.playerName}
+                <span className="ml-1 font-normal text-muted-foreground">
+                  ({Math.round(stats.bestWinRate.winRate)}%, {stats.bestWinRate.wins}/{stats.bestWinRate.matches})
+                </span>
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">No wins yet</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function buildLocationStats(locations: Location[], matches: Match[]): LocationStats[] {
+  const rows = new Map<string, {
+    locationId: string;
+    locationName: string;
+    matches: number;
+    playerRows: Map<string, { playerId: string; playerName: string; matches: number; wins: number }>;
+  }>();
+
+  locations.forEach((location) => {
+    rows.set(location.id, {
+      locationId: location.id,
+      locationName: location.name,
+      matches: 0,
+      playerRows: new Map(),
+    });
+  });
+
+  matches.forEach((match) => {
+    const location = rows.get(match.locationId) ?? {
+      locationId: match.locationId,
+      locationName: match.locationName,
+      matches: 0,
+      playerRows: new Map<string, { playerId: string; playerName: string; matches: number; wins: number }>(),
+    };
+
+    location.matches += 1;
+    match.players.forEach((player) => {
+      const current = location.playerRows.get(player.playerId) ?? {
+        playerId: player.playerId,
+        playerName: player.playerName,
+        matches: 0,
+        wins: 0,
+      };
+      location.playerRows.set(player.playerId, {
+        ...current,
+        playerName: player.playerName,
+        matches: current.matches + 1,
+        wins: current.wins + (player.winner ? 1 : 0),
+      });
+    });
+
+    rows.set(match.locationId, location);
+  });
+
+  return [...rows.values()]
+    .map((location) => {
+      const playerRows = [...location.playerRows.values()];
+      const topWinner = playerRows
+        .filter((player) => player.wins > 0)
+        .sort((a, b) => b.wins - a.wins || a.playerName.localeCompare(b.playerName))[0];
+      const bestWinRate = playerRows
+        .filter((player) => player.wins > 0)
+        .map((player) => ({ ...player, winRate: (player.wins / player.matches) * 100 }))
+        .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins || b.matches - a.matches || a.playerName.localeCompare(b.playerName))[0];
+
+      return {
+        locationId: location.locationId,
+        locationName: location.locationName,
+        matches: location.matches,
+        topWinner,
+        bestWinRate,
+      };
+    })
+    .sort((a, b) => b.matches - a.matches || a.locationName.localeCompare(b.locationName));
 }
 
 function LocationDialog({
