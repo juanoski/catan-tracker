@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { Clock3, Flame, MapPin, PlusCircle, Trophy, TrendingUp, TrendingDown, Minus, Swords, Crown, Users } from "lucide-react";
+import { CalendarDays, Clock3, Flame, MapPin, PlusCircle, Trophy, TrendingUp, TrendingDown, Minus, Swords, Crown, Users } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export function DashboardPage() {
 
   const myEntry = leaderboard?.find((e) => e.playerId === user?.playerId);
   const loadedMatches = matchPage?.content ?? [];
+  const lastMatch = loadedMatches[0];
   const recentMatches = loadedMatches.slice(0, 10);
   const pulse = buildLeaguePulse(loadedMatches, leaderboard ?? [], matchPage?.totalElements ?? loadedMatches.length);
 
@@ -139,6 +140,8 @@ export function DashboardPage() {
           loading={loadingMatches}
         />
       </div>
+
+      <LastMatchSummary match={lastMatch} loading={loadingMatches} currentUserId={user?.playerId ?? ""} />
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Leaderboard */}
@@ -361,6 +364,117 @@ function PulseCard({
   );
 
   return href ? <Link to={href}>{body}</Link> : body;
+}
+
+function LastMatchSummary({
+  match,
+  loading,
+  currentUserId,
+}: {
+  match?: Match;
+  loading: boolean;
+  currentUserId: string;
+}) {
+  if (loading) return <Skeleton className="h-48 rounded-xl" />;
+
+  if (!match) {
+    return (
+      <Card>
+        <CardContent className="flex min-h-40 flex-col items-center justify-center px-4 py-8 text-center text-muted-foreground">
+          <Swords className="mb-2 h-8 w-8 opacity-40" />
+          <p className="text-sm font-medium">No last match yet.</p>
+          <Button asChild variant="link" size="sm" className="mt-1">
+            <Link to="/matches/new">Log the first match</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const winner = match.players.find((player) => player.winner);
+  const sortedPlayers = [...match.players].sort((a, b) => b.points - a.points || a.playerName.localeCompare(b.playerName));
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarDays className="h-4 w-4 text-accent" />
+            Last match
+          </CardTitle>
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/matches/${match.id}`}>Open match</Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+          <div className="rounded-lg border bg-background p-4">
+            <p className="text-sm text-muted-foreground">Winner</p>
+            {winner ? (
+              <Link to={`/players/${winner.playerId}`} className="mt-1 flex items-center gap-2 text-xl font-semibold text-primary hover:underline">
+                <Crown className="h-5 w-5 text-accent" />
+                {winner.playerName}
+              </Link>
+            ) : (
+              <p className="mt-1 text-xl font-semibold">No winner recorded</p>
+            )}
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <MiniFact label="Date" value={format(new Date(match.playedAt), "MMM d, yyyy")} />
+              <MiniFact label="Location" value={match.locationName} />
+              <MiniFact label="Winning points" value={winner ? `${winner.points} pts` : "-"} />
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-background p-4">
+            <p className="text-sm text-muted-foreground">Players</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {sortedPlayers.map((player) => (
+                <LastMatchPlayerChip
+                  key={player.id}
+                  player={player}
+                  isCurrentUser={player.playerId === currentUserId}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniFact({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
+function LastMatchPlayerChip({
+  player,
+  isCurrentUser,
+}: {
+  player: Match["players"][number];
+  isCurrentUser: boolean;
+}) {
+  const colorClass = CATAN_COLORS[player.color.toLowerCase()] ?? "bg-gray-400";
+
+  return (
+    <Link
+      to={`/players/${player.playerId}`}
+      className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors hover:bg-muted ${
+        isCurrentUser ? "border-accent bg-accent/10 font-semibold" : "border-border bg-card"
+      }`}
+    >
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${colorClass}`} />
+      <span>{player.playerName}</span>
+      <span className="text-muted-foreground">{player.points} pts</span>
+      {player.winner && <Crown className="h-3.5 w-3.5 text-accent" />}
+    </Link>
+  );
 }
 
 function MatchCard({ match, currentUserId }: { match: Match; currentUserId: string }) {
