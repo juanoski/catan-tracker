@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import {
   ArrowLeft,
   Award,
+  ChevronDown,
   Crown,
   Flame,
   LineChart,
@@ -55,9 +56,18 @@ type HeadToHeadRow = {
   pointsAgainst: number;
 };
 
+const CHARTS_OPEN_KEY = "catan.playerProfile.chartsOpen";
+const DETAILS_OPEN_KEY = "catan.playerProfile.detailsOpen";
+const HEAD_TO_HEAD_OPEN_KEY = "catan.playerProfile.headToHeadOpen";
+const RECENT_OPEN_KEY = "catan.playerProfile.recentOpen";
+
 export function PlayerProfilePage() {
   const { playerId = "" } = useParams();
   const navigate = useNavigate();
+  const [chartsOpen, setChartsOpen] = useState(() => readStoredBoolean(CHARTS_OPEN_KEY, false));
+  const [detailsOpen, setDetailsOpen] = useState(() => readStoredBoolean(DETAILS_OPEN_KEY, true));
+  const [headToHeadOpen, setHeadToHeadOpen] = useState(() => readStoredBoolean(HEAD_TO_HEAD_OPEN_KEY, true));
+  const [recentOpen, setRecentOpen] = useState(() => readStoredBoolean(RECENT_OPEN_KEY, true));
 
   const { data: player, isPending: loadingPlayer } = useQuery({
     queryKey: ["players", playerId],
@@ -98,6 +108,22 @@ export function PlayerProfilePage() {
   const playerName = stats?.playerName ?? player?.name ?? "Player";
   const initials = getInitials(playerName);
 
+  useEffect(() => {
+    writeStoredBoolean(CHARTS_OPEN_KEY, chartsOpen);
+  }, [chartsOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(DETAILS_OPEN_KEY, detailsOpen);
+  }, [detailsOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(HEAD_TO_HEAD_OPEN_KEY, headToHeadOpen);
+  }, [headToHeadOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(RECENT_OPEN_KEY, recentOpen);
+  }, [recentOpen]);
+
   function goBack() {
     if (window.history.length > 1) {
       navigate(-1);
@@ -110,7 +136,7 @@ export function PlayerProfilePage() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-32 rounded-xl" />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
         </div>
       </div>
@@ -168,7 +194,7 @@ export function PlayerProfilePage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <StatCard icon={Swords} title="Matches" value={stats.totalMatches} subtitle={`${stats.totalWins} wins`} />
         <StatCard icon={Trophy} title="Win rate" value={formatWinRate(stats.winRate)} subtitle={`${stats.totalWins}/${stats.totalMatches || 0}`} />
         <StatCard icon={Target} title="Avg points" value={stats.avgPoints.toFixed(1)} subtitle={`High ${stats.highestPointsSingleGame}`} />
@@ -179,8 +205,14 @@ export function PlayerProfilePage() {
         <StatCard icon={Award} title="Achievements" value={achievements.length} subtitle="Unlocked" />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card>
+      <CollapsibleSection
+        icon={LineChart}
+        title="Performance"
+        open={chartsOpen}
+        onToggle={() => setChartsOpen((open) => !open)}
+      >
+        <div className="grid min-w-0 gap-4 sm:gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <LineChart className="h-4 w-4 text-accent" />
@@ -196,7 +228,7 @@ export function PlayerProfilePage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4 text-accent" />
@@ -207,9 +239,16 @@ export function PlayerProfilePage() {
             <HorizontalBarChart rows={colorRows} emptyText="No color data yet." />
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </CollapsibleSection>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <CollapsibleSection
+        icon={Users}
+        title="Details"
+        open={detailsOpen}
+        onToggle={() => setDetailsOpen((open) => !open)}
+      >
+        <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -255,20 +294,26 @@ export function PlayerProfilePage() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </CollapsibleSection>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-4 w-4 text-accent" />
-            Head-to-head
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleSection
+        icon={Users}
+        title="Head-to-head"
+        badge={`${headToHeadRows.length} shown`}
+        open={headToHeadOpen}
+        onToggle={() => setHeadToHeadOpen((open) => !open)}
+      >
           {headToHeadRows.length === 0 ? (
             <EmptyPanel text="No head-to-head records yet." />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              <div className="space-y-3 md:hidden">
+                {headToHeadRows.map((row) => (
+                  <HeadToHeadCard key={row.opponentId} row={row} />
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
@@ -304,19 +349,19 @@ export function PlayerProfilePage() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
-        </CardContent>
-      </Card>
+      </CollapsibleSection>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Crown className="h-4 w-4 text-accent" />
-            Recent matches
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <CollapsibleSection
+        icon={Crown}
+        title="Recent matches"
+        badge={`${playerMatches.length} loaded`}
+        open={recentOpen}
+        onToggle={() => setRecentOpen((open) => !open)}
+      >
+        <div className="space-y-3">
           {playerMatches.length === 0 ? (
             <EmptyPanel text="No recent matches found in the loaded history." />
           ) : (
@@ -324,8 +369,8 @@ export function PlayerProfilePage() {
               <RecentMatchCard key={match.id} match={match} playerId={playerId} />
             ))
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -345,6 +390,64 @@ function buildColorRows(stats?: PlayerStats): ChartRow[] {
     })
     .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
+function CollapsibleSection({
+  icon: Icon,
+  title,
+  badge,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: typeof Trophy;
+  title: string;
+  badge?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+          aria-expanded={open}
+        >
+          <span className="flex items-center gap-2">
+            <Icon className="h-4 w-4 text-accent" />
+            <span className="text-base font-semibold leading-none tracking-tight">{title}</span>
+            {badge && (
+              <Badge variant="secondary" className="shrink-0 text-xs">
+                {badge}
+              </Badge>
+            )}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </CardHeader>
+      <CardContent className={`${open ? "block" : "hidden sm:block"} min-w-0 overflow-hidden`}>{children}</CardContent>
+    </Card>
+  );
+}
+
+function readStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback;
+  const value = window.localStorage.getItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function writeStoredBoolean(key: string, value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(value));
 }
 
 function buildHeadToHeadRows(matches: Match[], playerId: string): HeadToHeadRow[] {
@@ -399,7 +502,8 @@ function EloLineChart({
     return <EmptyPanel text={`No rating history yet. Current ELO: ${currentElo}.`} />;
   }
 
-  const points = ratings.map((rating) => ({
+  const visibleRatings = ratings.slice(-24);
+  const points = visibleRatings.map((rating) => ({
     label: format(new Date(rating.recordedAt), "MMM d"),
     value: rating.eloAfter,
     delta: rating.delta,
@@ -408,26 +512,32 @@ function EloLineChart({
   const min = Math.min(...values, 1000);
   const max = Math.max(...values, 1000);
   const range = Math.max(max - min, 1);
+  const chartMinWidth = Math.max(points.length * 24, 320);
 
   return (
-    <div className="space-y-4">
-      <div className="flex h-52 items-end gap-2 rounded-lg border bg-muted/30 p-4">
-        {points.map((point, index) => {
-          const height = 18 + ((point.value - min) / range) * 82;
-          return (
-            <div key={`${point.label}-${index}`} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-              <div className="flex h-40 w-full items-end">
-                <div
-                  className="w-full rounded-t-md bg-accent"
-                  style={{ height: `${height}%` }}
-                  title={`${point.label}: ${point.value} ELO (${point.delta >= 0 ? "+" : ""}${point.delta})`}
-                />
+    <div className="min-w-0 space-y-4">
+      <div className="-mx-2 overflow-x-auto px-2 pb-1">
+        <div className="flex h-52 items-end gap-2 rounded-lg border bg-muted/30 p-4" style={{ minWidth: chartMinWidth }}>
+          {points.map((point, index) => {
+            const height = 18 + ((point.value - min) / range) * 82;
+            return (
+              <div key={`${point.label}-${index}`} className="flex min-w-3 flex-1 flex-col items-center gap-2">
+                <div className="flex h-40 w-full items-end">
+                  <div
+                    className="w-full rounded-t-md bg-accent"
+                    style={{ height: `${height}%` }}
+                    title={`${point.label}: ${point.value} ELO (${point.delta >= 0 ? "+" : ""}${point.delta})`}
+                  />
+                </div>
+                <span className="max-w-14 truncate text-[10px] text-muted-foreground">{point.label}</span>
               </div>
-              <span className="max-w-14 truncate text-[10px] text-muted-foreground">{point.label}</span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+      {ratings.length > points.length && (
+        <p className="text-xs text-muted-foreground">Showing latest {points.length} of {ratings.length} rating changes.</p>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         <MiniMetric label="Start" value={ratings[0].eloBefore} />
         <MiniMetric label="Peak" value={max} />
@@ -499,6 +609,36 @@ function RecentMatchCard({ match, playerId }: { match: Match; playerId: string }
   );
 }
 
+function HeadToHeadCard({ row }: { row: HeadToHeadRow }) {
+  const decided = row.wins + row.losses;
+  const winRate = decided ? Math.round((row.wins / decided) * 100) : 0;
+
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link to={`/players/${row.opponentId}`} className="block truncate font-semibold text-primary hover:underline">
+            {row.opponentName}
+          </Link>
+          <p className="mt-1 text-xs text-muted-foreground">{row.matches} matches together</p>
+        </div>
+        <Badge variant={row.wins >= row.losses ? "default" : "secondary"} className="shrink-0">
+          {decided ? `${winRate}%` : "-"}
+        </Badge>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+        <MiniMetric label="Record" value={`${row.wins}-${row.losses}`} />
+        <MiniMetric label="Avg pts" value={(row.pointsFor / row.matches).toFixed(1)} />
+        <MiniMetric label="Opp avg" value={(row.pointsAgainst / row.matches).toFixed(1)} />
+      </div>
+      {row.neutralResults > 0 && (
+        <p className="mt-2 text-xs text-muted-foreground">{row.neutralResults} neutral results</p>
+      )}
+    </div>
+  );
+}
+
 function MatchupCard({
   title,
   matchup,
@@ -537,15 +677,15 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardContent className="p-4">
+      <CardContent className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-semibold mt-1">{value}</p>
-            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground sm:text-sm">{title}</p>
+            <p className="mt-1 truncate text-lg font-semibold sm:text-2xl" title={String(value)}>{value}</p>
+            <p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground sm:mt-1 sm:text-xs">{subtitle}</p>
           </div>
-          <div className="rounded-md bg-accent/15 p-2 text-accent">
-            <Icon className="h-4 w-4" />
+          <div className="shrink-0 rounded-md bg-accent/15 p-1.5 text-accent sm:p-2">
+            <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </div>
         </div>
       </CardContent>

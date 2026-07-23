@@ -1,14 +1,15 @@
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Crown, MapPin, Pencil, Trash2, Trophy, Users } from "lucide-react";
+import { ArrowLeft, ChevronDown, Clock3, Crown, MapPin, Pencil, Trash2, Trophy, Users } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Match } from "@/types/api";
 
@@ -23,10 +24,17 @@ const CATAN_COLOR_HEX: Record<string, string> = {
   purple: "#9333ea",
 };
 
+const DETAILS_OPEN_KEY = "catan.matchDetail.detailsOpen";
+const PLAYERS_OPEN_KEY = "catan.matchDetail.playersOpen";
+const NOTES_OPEN_KEY = "catan.matchDetail.notesOpen";
+
 export function MatchDetailPage() {
   const { matchId = "" } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
+  const [detailsOpen, setDetailsOpen] = useState(() => readStoredBoolean(DETAILS_OPEN_KEY, true));
+  const [playersOpen, setPlayersOpen] = useState(() => readStoredBoolean(PLAYERS_OPEN_KEY, true));
+  const [notesOpen, setNotesOpen] = useState(() => readStoredBoolean(NOTES_OPEN_KEY, true));
 
   const { data: match, isPending } = useQuery({
     queryKey: ["matches", matchId],
@@ -58,6 +66,20 @@ export function MatchDetailPage() {
     else navigate("/matches");
   }
 
+  const sortedPlayers = useMemo(() => (match ? [...match.players].sort(sortMatchPlayers) : []), [match]);
+
+  useEffect(() => {
+    writeStoredBoolean(DETAILS_OPEN_KEY, detailsOpen);
+  }, [detailsOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(PLAYERS_OPEN_KEY, playersOpen);
+  }, [playersOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(NOTES_OPEN_KEY, notesOpen);
+  }, [notesOpen]);
+
   if (isPending) {
     return (
       <div className="space-y-6">
@@ -86,21 +108,21 @@ export function MatchDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="outline" size="sm" onClick={goBack}>
+      <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+        <Button variant="outline" size="sm" className="justify-center sm:justify-start" onClick={goBack}>
           <ArrowLeft className="mr-1.5 h-4 w-4" />
           Back
         </Button>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild disabled={!previousMatch}>
-            <Link to={previousMatch ? `/matches/${previousMatch.id}` : "#"}>Previous</Link>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button variant="outline" size="sm" asChild={Boolean(previousMatch)} disabled={!previousMatch}>
+            {previousMatch ? <Link to={`/matches/${previousMatch.id}`}>Previous</Link> : <span>Previous</span>}
           </Button>
-          <Button variant="outline" size="sm" asChild disabled={!nextMatch}>
-            <Link to={nextMatch ? `/matches/${nextMatch.id}` : "#"}>Next</Link>
+          <Button variant="outline" size="sm" asChild={Boolean(nextMatch)} disabled={!nextMatch}>
+            {nextMatch ? <Link to={`/matches/${nextMatch.id}`}>Next</Link> : <span>Next</span>}
           </Button>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <Button variant="outline" size="sm" asChild>
               <Link to={`/matches/${match.id}/edit`}>
                 <Pencil className="mr-1.5 h-4 w-4" />
@@ -149,15 +171,35 @@ export function MatchDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-4 w-4 text-accent" />
-            Players
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+      <CollapsibleSection
+        icon={Trophy}
+        title="Match details"
+        open={detailsOpen}
+        onToggle={() => setDetailsOpen((open) => !open)}
+      >
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+          <MiniFact label="Created by" value={match.createdByName} />
+          <MiniFact label="Expansion" value={match.expansionName} />
+          <MiniFact label="Played" value={format(new Date(match.playedAt), "MMM d, yyyy")} />
+          <MiniFact label="Time" value={format(new Date(match.playedAt), "h:mm a")} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        icon={Users}
+        title="Players"
+        badge={`${match.players.length} players`}
+        open={playersOpen}
+        onToggle={() => setPlayersOpen((open) => !open)}
+      >
+          <div className="space-y-3 md:hidden">
+            {sortedPlayers.map((player, index) => (
+              <PlayerResultCard key={player.id} player={player} placement={index + 1} />
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Player</th>
@@ -169,7 +211,7 @@ export function MatchDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {[...match.players].sort((a, b) => b.points - a.points).map((player) => (
+              {sortedPlayers.map((player) => (
                 <tr key={player.id} className="border-b last:border-0">
                   <td className="py-3 pr-3">
                     <Link to={`/players/${player.playerId}`} className="font-medium text-primary hover:underline">
@@ -208,19 +250,19 @@ export function MatchDetailPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </CardContent>
-      </Card>
+            </table>
+          </div>
+      </CollapsibleSection>
 
       {match.notes && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{match.notes}</p>
-          </CardContent>
-        </Card>
+        <CollapsibleSection
+          icon={Clock3}
+          title="Notes"
+          open={notesOpen}
+          onToggle={() => setNotesOpen((open) => !open)}
+        >
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">{match.notes}</p>
+        </CollapsibleSection>
       )}
     </div>
   );
@@ -229,8 +271,121 @@ export function MatchDetailPage() {
 function MiniFact({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg border bg-background p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-semibold">{value}</p>
+      <p className="truncate text-xs text-muted-foreground" title={label}>{label}</p>
+      <p className="mt-1 truncate font-semibold" title={String(value)}>{value}</p>
     </div>
   );
+}
+
+function PlayerResultCard({
+  player,
+  placement,
+}: {
+  player: Match["players"][number];
+  placement: number;
+}) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <Badge variant="secondary" className="shrink-0">#{placement}</Badge>
+            <Link to={`/players/${player.playerId}`} className="truncate font-semibold text-primary hover:underline">
+              {player.playerName}
+            </Link>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="h-3 w-3 rounded-full border"
+                style={{ backgroundColor: CATAN_COLOR_HEX[player.color.toLowerCase()] ?? "#94a3b8" }}
+              />
+              {player.color}
+            </span>
+            <span>{player.points} pts</span>
+          </div>
+        </div>
+        {player.winner ? (
+          <Badge className="shrink-0 gap-1"><Crown className="h-3 w-3" /> Winner</Badge>
+        ) : (
+          <Badge variant="secondary" className="shrink-0">Played</Badge>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <MiniFact label="ELO before" value={player.eloBefore} />
+        <MiniFact label="ELO after" value={`${player.eloAfter} (${player.eloDelta >= 0 ? "+" : ""}${player.eloDelta})`} />
+      </div>
+
+      {(player.longestRoad || player.largestArmy) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {player.longestRoad && <Badge variant="outline">Road</Badge>}
+          {player.largestArmy && <Badge variant="outline">Army</Badge>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CollapsibleSection({
+  icon: Icon,
+  title,
+  badge,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: typeof Trophy;
+  title: string;
+  badge?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+          aria-expanded={open}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Icon className="h-4 w-4 shrink-0 text-accent" />
+            <span className="truncate text-base font-semibold leading-none tracking-tight">{title}</span>
+            {badge && (
+              <Badge variant="secondary" className="shrink-0 text-xs">
+                {badge}
+              </Badge>
+            )}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform sm:hidden ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </CardHeader>
+      <CardContent className={`${open ? "block" : "hidden sm:block"} min-w-0 space-y-4 overflow-hidden`}>{children}</CardContent>
+    </Card>
+  );
+}
+
+function sortMatchPlayers(a: Match["players"][number], b: Match["players"][number]) {
+  if (a.winner !== b.winner) return a.winner ? -1 : 1;
+  return b.points - a.points || a.playerName.localeCompare(b.playerName);
+}
+
+function readStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback;
+  const value = window.localStorage.getItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function writeStoredBoolean(key: string, value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(value));
 }
