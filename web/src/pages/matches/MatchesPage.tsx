@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   CalendarDays,
+  ChevronDown,
   Clock3,
   Crown,
   Filter,
@@ -17,6 +18,7 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -64,13 +66,20 @@ const DEFAULT_FILTERS = {
 };
 
 const MATCH_PAGE_STEP = 25;
+const FILTERS_OPEN_KEY = "catan.matches.filtersOpen";
+const CHARTS_OPEN_KEY = "catan.matches.chartsOpen";
+const HISTORY_OPEN_KEY = "catan.matches.historyOpen";
 type MatchFilters = typeof DEFAULT_FILTERS;
 type ChartRow = { label: string; value: number; display?: string; color?: string };
+type ActiveFilterChip = { key: keyof MatchFilters; label: string; value: string };
 
 export function MatchesPage() {
   const { user, isAdmin } = useAuth();
   const [filters, setFilters] = useState<MatchFilters>({ ...DEFAULT_FILTERS });
   const [matchLimit, setMatchLimit] = useState(MATCH_PAGE_STEP);
+  const [filtersOpen, setFiltersOpen] = useState(() => readStoredBoolean(FILTERS_OPEN_KEY, false));
+  const [chartsOpen, setChartsOpen] = useState(() => readStoredBoolean(CHARTS_OPEN_KEY, false));
+  const [historyOpen, setHistoryOpen] = useState(() => readStoredBoolean(HISTORY_OPEN_KEY, true));
 
   const { data: matchPage, isPending: loadingMatches } = useQuery({
     queryKey: ["matches", "history", matchLimit],
@@ -115,9 +124,36 @@ export function MatchesPage() {
   const dateFilterInvalid = Boolean(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
   const totalMatches = matchPage?.totalElements ?? matches.length;
   const hasMoreMatches = matches.length < totalMatches;
+  const activeFilterCount = countActiveFilters(filters);
+  const remainingMatches = Math.max(totalMatches - matches.length, 0);
+  const nextMatchLoadCount = Math.min(MATCH_PAGE_STEP, remainingMatches);
+  const activeFilterChips = useMemo(
+    () => buildActiveFilterChips(filters, players, locations, expansions),
+    [filters, players, locations, expansions]
+  );
+
+  useEffect(() => {
+    writeStoredBoolean(FILTERS_OPEN_KEY, filtersOpen);
+  }, [filtersOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(CHARTS_OPEN_KEY, chartsOpen);
+  }, [chartsOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(HISTORY_OPEN_KEY, historyOpen);
+  }, [historyOpen]);
 
   function updateFilter<K extends keyof MatchFilters>(key: K, value: MatchFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function clearFilter(key: keyof MatchFilters) {
+    setFilters((prev) => ({ ...prev, [key]: DEFAULT_FILTERS[key] }));
+  }
+
+  function applyDateRange(dateFrom: string, dateTo: string) {
+    setFilters((prev) => ({ ...prev, dateFrom, dateTo }));
   }
 
   function handleDelete(match: Match) {
@@ -152,17 +188,57 @@ export function MatchesPage() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Filter className="h-4 w-4 text-accent" />
-              Filters
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setFilters({ ...DEFAULT_FILTERS })}>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((open) => !open)}
+              className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+              aria-expanded={filtersOpen}
+            >
+              <span className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-accent" />
+                <span className="text-base font-semibold leading-none tracking-tight">Filters</span>
+                {activeFilterCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {activeFilterCount} active
+                  </Badge>
+                )}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+                  filtersOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFilters({ ...DEFAULT_FILTERS })}
+              disabled={activeFilterCount === 0}
+            >
               <RotateCcw className="mr-1.5 h-4 w-4" />
               Reset filters
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        {activeFilterChips.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-6 pb-4">
+            {activeFilterChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => clearFilter(chip.key)}
+                className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={`Clear ${chip.label} filter`}
+              >
+                <span className="truncate">
+                  {chip.label}: {chip.value}
+                </span>
+                <X className="h-3 w-3 shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+        <CardContent className={filtersOpen ? "block" : "hidden sm:block"}>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
             <div className="space-y-2 sm:col-span-2 xl:col-span-2">
               <Label>Search</Label>
@@ -217,13 +293,14 @@ export function MatchesPage() {
               />
             </div>
           </div>
+          <QuickDateFilters onRangeSelect={applyDateRange} />
           {dateFilterInvalid && (
             <p className="text-sm text-destructive mt-3">The start date must be before the end date.</p>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <SummaryCard icon={Swords} title="Filtered matches" value={filteredMatches.length} subtitle={`${matches.length} of ${totalMatches} loaded`} />
         <SummaryCard icon={Crown} title="Top winner" value={summary.topWinner?.name ?? "-"} subtitle={summary.topWinner ? `${summary.topWinner.wins} wins` : "No wins yet"} />
         <SummaryCard icon={Clock3} title="Average duration" value={summary.averageDuration ? `${summary.averageDuration} min` : "-"} subtitle="Matches with a duration" />
@@ -232,12 +309,24 @@ export function MatchesPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BarChart3 className="h-4 w-4 text-accent" />
-            Charts
-          </CardTitle>
+          <button
+            type="button"
+            onClick={() => setChartsOpen((open) => !open)}
+            className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+            aria-expanded={chartsOpen}
+          >
+            <span className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-accent" />
+              <span className="text-base font-semibold leading-none tracking-tight">Charts</span>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+                chartsOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
         </CardHeader>
-        <CardContent>
+        <CardContent className={chartsOpen ? "block" : "hidden sm:block"}>
           {loadingMatches ? (
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
@@ -259,12 +348,27 @@ export function MatchesPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CalendarDays className="h-4 w-4 text-accent" />
-            Match history
-          </CardTitle>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((open) => !open)}
+            className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+            aria-expanded={historyOpen}
+          >
+            <span className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-accent" />
+              <span className="text-base font-semibold leading-none tracking-tight">Match history</span>
+              <Badge variant="secondary" className="shrink-0 text-xs">
+                {filteredMatches.length} shown
+              </Badge>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+                historyOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className={`${historyOpen ? "block" : "hidden sm:block"} space-y-3`}>
           {loadingMatches ? (
             Array.from({ length: 6 }).map((_, index) => (
               <Skeleton key={index} className="h-28 rounded-lg" />
@@ -275,15 +379,22 @@ export function MatchesPage() {
                 <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 <p className="text-sm">No loaded matches match these filters.</p>
               </div>
-              {hasMoreMatches && (
+              {activeFilterCount > 0 && (
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
+                  onClick={() => setFilters({ ...DEFAULT_FILTERS })}
                 >
-                  Load more history
+                  Clear filters
                 </Button>
+              )}
+              {hasMoreMatches && (
+                <LoadMoreButton
+                  loadCount={nextMatchLoadCount}
+                  remainingCount={remainingMatches}
+                  onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
+                />
               )}
             </>
           ) : (
@@ -299,14 +410,11 @@ export function MatchesPage() {
                 />
               ))}
               {hasMoreMatches && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
+                <LoadMoreButton
+                  loadCount={nextMatchLoadCount}
+                  remainingCount={remainingMatches}
                   onClick={() => setMatchLimit((current) => current + MATCH_PAGE_STEP)}
-                >
-                  Load more history
-                </Button>
+                />
               )}
             </>
           )}
@@ -339,6 +447,115 @@ function filterMatches(matches: Match[], filters: MatchFilters) {
     if (filters.dateTo && playedDate > filters.dateTo) return false;
     return true;
   });
+}
+
+function readStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback;
+  const value = window.localStorage.getItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function writeStoredBoolean(key: string, value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(value));
+}
+
+function countActiveFilters(filters: MatchFilters) {
+  return Object.entries(filters).filter(([key, value]) => value !== DEFAULT_FILTERS[key as keyof MatchFilters]).length;
+}
+
+function buildActiveFilterChips(
+  filters: MatchFilters,
+  players: Player[],
+  locations: Location[],
+  expansions: Expansion[]
+): ActiveFilterChip[] {
+  const chips: ActiveFilterChip[] = [];
+
+  if (filters.search.trim()) {
+    chips.push({ key: "search", label: "Search", value: filters.search.trim() });
+  }
+  if (filters.expansionId !== "all") {
+    chips.push({
+      key: "expansionId",
+      label: "Expansion",
+      value: expansions.find((expansion) => expansion.id === filters.expansionId)?.name ?? "Selected expansion",
+    });
+  }
+  if (filters.playerId !== "all") {
+    chips.push({
+      key: "playerId",
+      label: "Player",
+      value: players.find((player) => player.id === filters.playerId)?.name ?? "Selected player",
+    });
+  }
+  if (filters.locationId !== "all") {
+    chips.push({
+      key: "locationId",
+      label: "Location",
+      value: locations.find((location) => location.id === filters.locationId)?.name ?? "Selected location",
+    });
+  }
+  if (filters.playerCount !== "all") {
+    chips.push({ key: "playerCount", label: "Count", value: `${filters.playerCount} players` });
+  }
+  if (filters.dateFrom) {
+    chips.push({ key: "dateFrom", label: "From", value: formatDateFilter(filters.dateFrom) });
+  }
+  if (filters.dateTo) {
+    chips.push({ key: "dateTo", label: "To", value: formatDateFilter(filters.dateTo) });
+  }
+
+  return chips;
+}
+
+function formatDateFilter(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
+}
+
+function formatDateInput(date: Date) {
+  return format(date, "yyyy-MM-dd");
+}
+
+function QuickDateFilters({
+  onRangeSelect,
+}: {
+  onRangeSelect: (dateFrom: string, dateTo: string) => void;
+}) {
+  function applyLastDays(days: number) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - days + 1);
+    onRangeSelect(formatDateInput(start), formatDateInput(end));
+  }
+
+  function applyThisYear() {
+    const now = new Date();
+    onRangeSelect(`${now.getFullYear()}-01-01`, formatDateInput(now));
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      <Label>Quick dates</Label>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <Button type="button" variant="outline" size="sm" onClick={() => applyLastDays(7)}>
+          Last 7
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => applyLastDays(30)}>
+          Last 30
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={applyThisYear}>
+          This year
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onRangeSelect("", "")}>
+          All dates
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function buildSummary(matches: Match[]) {
@@ -562,19 +779,38 @@ function SummaryCard({
 }) {
   return (
     <Card>
-      <CardContent className="p-4">
+      <CardContent className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-semibold mt-1">{value}</p>
-            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground sm:text-sm">{title}</p>
+            <p className="mt-1 truncate text-lg font-semibold sm:text-2xl" title={String(value)}>
+              {value}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground sm:mt-1 sm:text-xs">{subtitle}</p>
           </div>
-          <div className="rounded-md bg-accent/15 p-2 text-accent">
-            <Icon className="h-4 w-4" />
+          <div className="shrink-0 rounded-md bg-accent/15 p-1.5 text-accent sm:p-2">
+            <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function LoadMoreButton({
+  loadCount,
+  remainingCount,
+  onClick,
+}: {
+  loadCount: number;
+  remainingCount: number;
+  onClick: () => void;
+}) {
+  return (
+    <Button type="button" variant="outline" className="w-full" onClick={onClick}>
+      Load {loadCount} more
+      <span className="ml-2 text-xs text-muted-foreground">({remainingCount} remaining)</span>
+    </Button>
   );
 }
 
@@ -591,41 +827,80 @@ function HistoryMatchCard({
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const navigate = useNavigate();
   const winner = match.players.find((player) => player.winner);
   const currentUserEntry = match.players.find((player) => player.playerId === currentUserId);
+  const sortedPlayers = [...match.players].sort(sortMatchPlayersByResult);
+  const detailPath = `/matches/${match.id}`;
+
+  function openDetail() {
+    navigate(detailPath);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openDetail();
+    }
+  }
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openDetail}
+      onKeyDown={handleKeyDown}
+      aria-label={`View match ${winner ? `won by ${winner.playerName}` : "details"}`}
+      className="rounded-lg border bg-card p-3 space-y-3 shadow-sm transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-4"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Link to={`/matches/${match.id}`} className="font-semibold hover:underline">
+            <Link to={detailPath} className="text-base font-semibold hover:underline" onClick={(event) => event.stopPropagation()}>
               {winner ? `${winner.playerName} won` : "No winner recorded"}
             </Link>
+            {winner && (
+              <Badge variant="outline" className="shrink-0">
+                {winner.points} pts
+              </Badge>
+            )}
             {currentUserEntry && (
               <Badge variant={currentUserEntry.winner ? "default" : "secondary"} className="text-xs">
                 {currentUserEntry.winner ? "You won" : "You played"}
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            <Link to={`/matches/${match.id}`} className="hover:underline">
-              {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")} - {match.locationName} - {match.expansionName}
-            </Link>
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Logged by {match.createdByName}
-            {match.durationMinutes ? ` - ${match.durationMinutes} min` : ""}
-            {match.deckLayout ? ` - ${match.deckLayout} board` : ""}
-          </p>
+          <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
+            <span className="inline-flex items-center gap-1">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {format(new Date(match.playedAt), "MMM d, yyyy h:mm a")}
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{match.locationName}</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Users className="h-3.5 w-3.5" />
+              {match.players.length} players
+            </span>
+            {match.durationMinutes && (
+              <span className="inline-flex items-center gap-1">
+                <Clock3 className="h-3.5 w-3.5" />
+                {match.durationMinutes} min
+              </span>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary" className="text-xs">{match.expansionName}</Badge>
+            {match.deckLayout && <Badge variant="outline" className="text-xs">{match.deckLayout} board</Badge>}
+            <span className="text-xs text-muted-foreground">Logged by {match.createdByName}</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {winner && (
-            <Badge variant="outline" className="shrink-0">
-              {winner.points} pts
-            </Badge>
-          )}
+        <div className="flex items-center gap-1 sm:shrink-0" onClick={(event) => event.stopPropagation()}>
+          <Button type="button" variant="outline" size="sm" className="h-8 px-2" asChild>
+            <Link to={detailPath}>View</Link>
+          </Button>
           {canManage && (
             <>
               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" asChild>
@@ -649,8 +924,8 @@ function HistoryMatchCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {match.players.map((player) => (
+      <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+        {sortedPlayers.map((player) => (
           <PlayerChip key={player.id} player={player} isCurrentUser={player.playerId === currentUserId} />
         ))}
       </div>
@@ -666,6 +941,11 @@ function canManageMatch(match: Match, currentUserId: string | undefined, isAdmin
   return isAdmin || match.createdById === currentUserId;
 }
 
+function sortMatchPlayersByResult(a: Match["players"][number], b: Match["players"][number]) {
+  if (a.winner !== b.winner) return a.winner ? -1 : 1;
+  return b.points - a.points || a.playerName.localeCompare(b.playerName);
+}
+
 function PlayerChip({
   player,
   isCurrentUser,
@@ -678,15 +958,15 @@ function PlayerChip({
 
   return (
     <div
-      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+      className={`flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
         isCurrentUser ? "border-accent bg-accent/10 font-semibold" : "border-border bg-background"
       }`}
     >
       <span className={`h-2.5 w-2.5 rounded-full ${colorClass} shrink-0`} />
-      <Link to={`/players/${player.playerId}`} className="hover:underline">
+      <Link to={`/players/${player.playerId}`} className="max-w-[8.5rem] truncate hover:underline sm:max-w-none">
         {player.playerName}
       </Link>
-      <span className="text-muted-foreground">{player.points}</span>
+      <span className="font-semibold text-foreground">{player.points}</span>
       {player.winner && <Crown className="h-3 w-3 text-accent" />}
       {player.longestRoad && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Road</Badge>}
       {player.largestArmy && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">Army</Badge>}
@@ -695,7 +975,7 @@ function PlayerChip({
           delta > 0 ? "text-green-600" : delta < 0 ? "text-destructive" : "text-muted-foreground"
         }`}
       >
-        {delta > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+        {delta > 0 ? <TrendingUp className="h-3 w-3" /> : delta < 0 ? <TrendingDown className="h-3 w-3" /> : null}
         {delta > 0 ? "+" : ""}
         {delta}
       </span>
