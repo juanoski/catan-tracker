@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { CalendarDays, Clock3, Flame, MapPin, PlusCircle, Trophy, TrendingUp, TrendingDown, Minus, Swords, Crown, Users } from "lucide-react";
+import { Award, CalendarDays, Clock3, Flame, MapPin, PlusCircle, Scale, Trophy, TrendingUp, TrendingDown, Minus, Swords, Crown, User, Users } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,8 @@ export function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      <QuickActions playerId={user?.playerId} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <PulseCard
@@ -208,6 +210,42 @@ export function DashboardPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function QuickActions({ playerId }: { playerId?: string }) {
+  const actions = [
+    { to: "/matches/new", label: "Log match", icon: PlusCircle, primary: true },
+    { to: "/matches", label: "Matches", icon: Swords },
+    { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
+    { to: "/compare", label: "Compare", icon: Scale },
+    { to: "/achievements", label: "Achievements", icon: Award },
+    ...(playerId ? [{ to: `/players/${playerId}`, label: "My profile", icon: User }] : []),
+  ];
+
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {actions.map((action) => (
+            <Link
+              key={action.to}
+              to={action.to}
+              className={`flex min-h-16 items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                action.primary
+                  ? "border-accent bg-accent text-accent-foreground hover:bg-accent/90"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+            >
+              <span className={action.primary ? "rounded-md bg-accent-foreground/15 p-2" : "rounded-md bg-accent/15 p-2 text-accent"}>
+                <action.icon className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 truncate">{action.label}</span>
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
