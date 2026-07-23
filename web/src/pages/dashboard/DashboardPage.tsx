@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Award, CalendarDays, Clock3, Flame, MapPin, PlusCircle, Scale, Trophy, TrendingUp, TrendingDown, Minus, Swords, Crown, User, Users } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -25,12 +26,12 @@ const CATAN_COLORS: Record<string, string> = {
 export function DashboardPage() {
   const { user } = useAuth();
 
-  const { data: leaderboard, isPending: loadingLeaderboard } = useQuery({
+  const { data: leaderboard, isPending: loadingLeaderboard, isError: leaderboardError, refetch: refetchLeaderboard } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: () => api.get<LeaderboardEntry[]>("/leaderboard").then((r) => r.data),
   });
 
-  const { data: matchPage, isPending: loadingMatches } = useQuery({
+  const { data: matchPage, isPending: loadingMatches, isError: matchesError, refetch: refetchMatches } = useQuery({
     queryKey: ["matches", "recent"],
     queryFn: () =>
       api.get<PageResponse<Match>>("/matches?size=100&sort=playedAt,desc").then((r) => r.data),
@@ -143,7 +144,13 @@ export function DashboardPage() {
         />
       </div>
 
-      <LastMatchSummary match={lastMatch} loading={loadingMatches} currentUserId={user?.playerId ?? ""} />
+      <LastMatchSummary
+        match={lastMatch}
+        loading={loadingMatches}
+        error={matchesError}
+        onRetry={refetchMatches}
+        currentUserId={user?.playerId ?? ""}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Leaderboard */}
@@ -155,8 +162,8 @@ export function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 p-3 pt-0">
-            {loadingLeaderboard
-              ? Array.from({ length: 5 }).map((_, i) => (
+            {loadingLeaderboard ? (
+              Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-8 w-8 rounded-full" />
                     <div className="flex-1 space-y-1">
@@ -165,13 +172,27 @@ export function DashboardPage() {
                     </div>
                   </div>
                 ))
-              : leaderboard?.slice(0, 8).map((entry) => (
+            ) : leaderboardError ? (
+              <ErrorState
+                title="Could not load rankings"
+                description="The leaderboard is unavailable right now."
+                action={<Button type="button" variant="outline" onClick={() => refetchLeaderboard()}>Try again</Button>}
+              />
+            ) : leaderboard?.length === 0 ? (
+              <EmptyState
+                icon={Trophy}
+                title="No rankings yet"
+                description="Rankings will appear after the first match is logged."
+              />
+            ) : (
+              leaderboard?.slice(0, 8).map((entry) => (
                   <LeaderboardRow
                     key={entry.playerId}
                     entry={entry}
                     isMe={entry.playerId === user?.playerId}
                   />
-                ))}
+                ))
+            )}
           </CardContent>
         </Card>
 
@@ -189,23 +210,32 @@ export function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3 p-3 pt-0">
-            {loadingMatches
-              ? Array.from({ length: 4 }).map((_, i) => (
+            {loadingMatches ? (
+              Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-20 w-full rounded-lg" />
                 ))
-              : recentMatches.length === 0
-              ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">No matches logged yet.</p>
+            ) : matchesError ? (
+              <ErrorState
+                title="Could not load recent matches"
+                description="The match feed could not be fetched right now."
+                action={<Button type="button" variant="outline" onClick={() => refetchMatches()}>Try again</Button>}
+              />
+            ) : recentMatches.length === 0 ? (
+                <EmptyState
+                  icon={Swords}
+                  title="No matches logged yet"
+                  description="Log the first match to start building stats."
+                  action={
                   <Button asChild variant="link" size="sm" className="mt-1">
                     <Link to="/matches/new">Log the first match</Link>
                   </Button>
-                </div>
-              )
-              : recentMatches.map((match) => (
+                  }
+                />
+            ) : (
+              recentMatches.map((match) => (
                   <MatchCard key={match.id} match={match} currentUserId={user?.playerId ?? ""} />
-                ))}
+                ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -407,25 +437,40 @@ function PulseCard({
 function LastMatchSummary({
   match,
   loading,
+  error,
+  onRetry,
   currentUserId,
 }: {
   match?: Match;
   loading: boolean;
+  error: boolean;
+  onRetry: () => void;
   currentUserId: string;
 }) {
   if (loading) return <Skeleton className="h-48 rounded-xl" />;
 
+  if (error) {
+    return (
+      <ErrorState
+        title="Could not load the last match"
+        description="The dashboard summary could not be fetched right now."
+        action={<Button type="button" variant="outline" onClick={onRetry}>Try again</Button>}
+      />
+    );
+  }
+
   if (!match) {
     return (
-      <Card>
-        <CardContent className="flex min-h-40 flex-col items-center justify-center px-4 py-8 text-center text-muted-foreground">
-          <Swords className="mb-2 h-8 w-8 opacity-40" />
-          <p className="text-sm font-medium">No last match yet.</p>
-          <Button asChild variant="link" size="sm" className="mt-1">
+      <EmptyState
+        icon={Swords}
+        title="No last match yet"
+        description="Once a match is logged, the latest result will appear here."
+        action={
+          <Button asChild>
             <Link to="/matches/new">Log the first match</Link>
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     );
   }
 

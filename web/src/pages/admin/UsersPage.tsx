@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +69,7 @@ export function UsersPage() {
   const [editTarget, setEditTarget] = useState<Player | null>(null);
   const [resetTarget, setResetTarget] = useState<Player | null>(null);
 
-  const { data: players = [], isPending } = useQuery({
+  const { data: players = [], isPending, isError, refetch } = useQuery({
     queryKey: ["players"],
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
@@ -116,6 +117,24 @@ export function UsersPage() {
             <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState
+          title="Could not load users"
+          description="User accounts could not be fetched from the server."
+          action={<Button type="button" variant="outline" onClick={() => refetch()}>Try again</Button>}
+        />
+      ) : players.length === 0 ? (
+        <EmptyState
+          icon={UserRound}
+          title="No users yet"
+          description="Create the first player account to start logging matches."
+          action={
+            <Button onClick={() => setCreateOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add user
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {players.map((player) => (
@@ -132,7 +151,7 @@ export function UsersPage() {
                     </div>
                     <p className="text-sm text-muted-foreground truncate">{player.email}</p>
                   </div>
-                  <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="icon"

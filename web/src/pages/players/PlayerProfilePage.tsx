@@ -22,6 +22,7 @@ import api from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
@@ -69,31 +70,31 @@ export function PlayerProfilePage() {
   const [headToHeadOpen, setHeadToHeadOpen] = useState(() => readStoredBoolean(HEAD_TO_HEAD_OPEN_KEY, true));
   const [recentOpen, setRecentOpen] = useState(() => readStoredBoolean(RECENT_OPEN_KEY, true));
 
-  const { data: player, isPending: loadingPlayer } = useQuery({
+  const { data: player, isPending: loadingPlayer, isError: playerError, refetch: refetchPlayer } = useQuery({
     queryKey: ["players", playerId],
     queryFn: () => api.get<Player>(`/players/${playerId}`).then((r) => r.data),
     enabled: Boolean(playerId),
   });
 
-  const { data: stats, isPending: loadingStats } = useQuery({
+  const { data: stats, isPending: loadingStats, isError: statsError, refetch: refetchStats } = useQuery({
     queryKey: ["players", playerId, "stats"],
     queryFn: () => api.get<PlayerStats>(`/players/${playerId}/stats`).then((r) => r.data),
     enabled: Boolean(playerId),
   });
 
-  const { data: ratings = [], isPending: loadingRatings } = useQuery({
+  const { data: ratings = [], isPending: loadingRatings, isError: ratingsError, refetch: refetchRatings } = useQuery({
     queryKey: ["players", playerId, "ratings"],
     queryFn: () => api.get<RatingHistoryEntry[]>(`/players/${playerId}/ratings`).then((r) => r.data),
     enabled: Boolean(playerId),
   });
 
-  const { data: achievements = [], isPending: loadingAchievements } = useQuery({
+  const { data: achievements = [], isPending: loadingAchievements, isError: achievementsError, refetch: refetchAchievements } = useQuery({
     queryKey: ["players", playerId, "achievements"],
     queryFn: () => api.get<PlayerAchievement[]>(`/players/${playerId}/achievements`).then((r) => r.data),
     enabled: Boolean(playerId),
   });
 
-  const { data: matchPage } = useQuery({
+  const { data: matchPage, isError: matchesError, refetch: refetchMatches } = useQuery({
     queryKey: ["matches", "history"],
     queryFn: () => api.get<PageResponse<Match>>("/matches?size=100&sort=playedAt,desc").then((r) => r.data),
   });
@@ -143,14 +144,39 @@ export function PlayerProfilePage() {
     );
   }
 
+  if (playerError || statsError) {
+    return (
+      <ErrorState
+        title="Could not load player"
+        description="The player profile or stats could not be fetched right now."
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              refetchPlayer();
+              refetchStats();
+            }}
+          >
+            Try again
+          </Button>
+        }
+      />
+    );
+  }
+
   if (!stats || !player) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Users className="mx-auto mb-2 h-8 w-8 opacity-40" />
-          <p className="text-sm">Player not found.</p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Users}
+        title="Player not found"
+        description="This player may have been deleted or the link may be outdated."
+        action={
+          <Button asChild variant="outline">
+            <Link to="/leaderboard">Open leaderboard</Link>
+          </Button>
+        }
+      />
     );
   }
 
@@ -222,6 +248,12 @@ export function PlayerProfilePage() {
           <CardContent>
             {loadingRatings ? (
               <Skeleton className="h-64 rounded-lg" />
+            ) : ratingsError ? (
+              <ErrorState
+                title="Could not load rating history"
+                description="The ELO chart could not be fetched right now."
+                action={<Button type="button" variant="outline" onClick={() => refetchRatings()}>Try again</Button>}
+              />
             ) : (
               <EloLineChart ratings={ratings} currentElo={stats.currentElo} />
             )}
@@ -272,8 +304,19 @@ export function PlayerProfilePage() {
           <CardContent>
             {loadingAchievements ? (
               <Skeleton className="h-40 rounded-lg" />
+            ) : achievementsError ? (
+              <ErrorState
+                title="Could not load achievements"
+                description="This player's achievements could not be fetched right now."
+                action={<Button type="button" variant="outline" onClick={() => refetchAchievements()}>Try again</Button>}
+              />
             ) : achievements.length === 0 ? (
-              <EmptyPanel text="No achievements unlocked yet." />
+              <EmptyState
+                icon={Award}
+                title="No achievements unlocked yet"
+                description="Unlocked achievements will appear here after matches are logged."
+                className="min-h-32"
+              />
             ) : (
               <div className="space-y-3">
                 {achievements.slice(0, 5).map((achievement) => (
@@ -304,8 +347,19 @@ export function PlayerProfilePage() {
         open={headToHeadOpen}
         onToggle={() => setHeadToHeadOpen((open) => !open)}
       >
-          {headToHeadRows.length === 0 ? (
-            <EmptyPanel text="No head-to-head records yet." />
+          {matchesError ? (
+            <ErrorState
+              title="Could not load head-to-head"
+              description="Match history is unavailable right now."
+              action={<Button type="button" variant="outline" onClick={() => refetchMatches()}>Try again</Button>}
+            />
+          ) : headToHeadRows.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No head-to-head records yet"
+              description="This will fill in once the player shares matches with others."
+              className="min-h-32"
+            />
           ) : (
             <>
               <div className="space-y-3 md:hidden">
@@ -362,8 +416,19 @@ export function PlayerProfilePage() {
         onToggle={() => setRecentOpen((open) => !open)}
       >
         <div className="space-y-3">
-          {playerMatches.length === 0 ? (
-            <EmptyPanel text="No recent matches found in the loaded history." />
+          {matchesError ? (
+            <ErrorState
+              title="Could not load recent matches"
+              description="Match history is unavailable right now."
+              action={<Button type="button" variant="outline" onClick={() => refetchMatches()}>Try again</Button>}
+            />
+          ) : playerMatches.length === 0 ? (
+            <EmptyState
+              icon={Crown}
+              title="No recent matches found"
+              description="This player has no matches in the loaded history yet."
+              className="min-h-32"
+            />
           ) : (
             playerMatches.slice(0, 8).map((match) => (
               <RecentMatchCard key={match.id} match={match} playerId={playerId} />

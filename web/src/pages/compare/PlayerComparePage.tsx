@@ -6,6 +6,7 @@ import { ArrowRightLeft, ChevronDown, Crown, Scale, Swords, Target, Trophy, User
 import api from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,23 +37,23 @@ export function PlayerComparePage() {
   const [h2hOpen, setH2hOpen] = useState(() => readStoredBoolean(H2H_OPEN_KEY, true));
   const [historyOpen, setHistoryOpen] = useState(() => readStoredBoolean(HISTORY_OPEN_KEY, true));
 
-  const { data: players = [], isPending: loadingPlayers } = useQuery({
+  const { data: players = [], isPending: loadingPlayers, isError: playersError, refetch: refetchPlayers } = useQuery({
     queryKey: ["players"],
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
 
-  const { data: matchPage, isPending: loadingMatches } = useQuery({
+  const { data: matchPage, isPending: loadingMatches, isError: matchesError, refetch: refetchMatches } = useQuery({
     queryKey: ["matches", "compare"],
     queryFn: () => api.get<PageResponse<Match>>("/matches?size=500&sort=playedAt,desc").then((r) => r.data),
   });
 
-  const { data: playerAStats, isPending: loadingAStats } = useQuery({
+  const { data: playerAStats, isPending: loadingAStats, isError: playerAStatsError, refetch: refetchPlayerAStats } = useQuery({
     queryKey: ["players", playerAId, "stats"],
     queryFn: () => api.get<PlayerStats>(`/players/${playerAId}/stats`).then((r) => r.data),
     enabled: Boolean(playerAId),
   });
 
-  const { data: playerBStats, isPending: loadingBStats } = useQuery({
+  const { data: playerBStats, isPending: loadingBStats, isError: playerBStatsError, refetch: refetchPlayerBStats } = useQuery({
     queryKey: ["players", playerBId, "stats"],
     queryFn: () => api.get<PlayerStats>(`/players/${playerBId}/stats`).then((r) => r.data),
     enabled: Boolean(playerBId),
@@ -64,6 +65,7 @@ export function PlayerComparePage() {
   const h2h = useMemo(() => buildHeadToHead(matches, playerAId, playerBId), [matches, playerAId, playerBId]);
   const ready = Boolean(playerAId && playerBId && playerAId !== playerBId);
   const loadingComparison = loadingMatches || loadingAStats || loadingBStats;
+  const comparisonError = matchesError || playerAStatsError || playerBStatsError;
 
   useEffect(() => {
     writeStoredString(PLAYER_A_KEY, playerAId);
@@ -151,16 +153,42 @@ export function PlayerComparePage() {
       </CollapsibleSection>
 
       {!ready ? (
-        <Card>
-          <CardContent className="flex min-h-40 items-center justify-center px-4 text-center text-sm text-muted-foreground">
-            Choose two different players to see the comparison.
-          </CardContent>
-        </Card>
+        playersError ? (
+          <ErrorState
+            title="Could not load players"
+            description="The player picker could not be populated."
+            action={<Button type="button" variant="outline" onClick={() => refetchPlayers()}>Try again</Button>}
+          />
+        ) : (
+          <EmptyState
+            icon={Scale}
+            title="Choose two players"
+            description="Pick two different players to compare ELO, wins, win rate, points, and shared matches."
+          />
+        )
       ) : loadingComparison ? (
         <div className="space-y-4">
           <Skeleton className="h-36 rounded-xl" />
           <Skeleton className="h-80 rounded-xl" />
         </div>
+      ) : comparisonError ? (
+        <ErrorState
+          title="Could not load comparison"
+          description="One or more comparison datasets could not be fetched."
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                refetchMatches();
+                refetchPlayerAStats();
+                refetchPlayerBStats();
+              }}
+            >
+              Try again
+            </Button>
+          }
+        />
       ) : (
         <>
           <CollapsibleSection
@@ -232,9 +260,12 @@ export function PlayerComparePage() {
             onToggle={() => setHistoryOpen((open) => !open)}
           >
               {h2h.recentMatches.length === 0 ? (
-                <div className="flex min-h-32 items-center justify-center rounded-lg bg-muted/50 px-4 text-center text-sm text-muted-foreground">
-                  These players have not shared a loaded match yet.
-                </div>
+                <EmptyState
+                  icon={Swords}
+                  title="No shared matches yet"
+                  description="These players have not appeared together in the loaded match history."
+                  className="min-h-32"
+                />
               ) : (
                 <div className="space-y-3">
                   {h2h.recentMatches.slice(0, 8).map((match) => (

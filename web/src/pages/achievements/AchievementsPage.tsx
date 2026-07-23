@@ -5,7 +5,8 @@ import { Award, ChevronDown, Filter, Medal, Search, Trophy, Users } from "lucide
 import api from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -26,12 +27,12 @@ export function AchievementsPage() {
   const [summaryOpen, setSummaryOpen] = useState(() => readStoredBoolean(SUMMARY_OPEN_KEY, true));
   const [listOpen, setListOpen] = useState(() => readStoredBoolean(LIST_OPEN_KEY, true));
 
-  const { data: achievements = [], isPending: loadingAchievements } = useQuery({
+  const { data: achievements = [], isPending: loadingAchievements, isError: achievementsError, refetch: refetchAchievements } = useQuery({
     queryKey: ["achievements"],
     queryFn: () => api.get<Achievement[]>("/achievements").then((r) => r.data),
   });
 
-  const { data: players = [], isPending: loadingPlayers } = useQuery({
+  const { data: players = [], isPending: loadingPlayers, isError: playersError, refetch: refetchPlayers } = useQuery({
     queryKey: ["players"],
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
@@ -45,6 +46,7 @@ export function AchievementsPage() {
   });
 
   const loadingUnlocks = unlockQueries.some((query) => query.isPending);
+  const unlocksError = unlockQueries.some((query) => query.isError);
   const unlocks = useMemo(() => {
     const rows: UnlockRow[] = [];
     unlockQueries.forEach((query, index) => {
@@ -200,8 +202,34 @@ export function AchievementsPage() {
             <div className="grid gap-4 lg:grid-cols-2">
               {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-36 rounded-lg" />)}
             </div>
+          ) : achievementsError || playersError || unlocksError ? (
+            <ErrorState
+              title="Could not load achievements"
+              description="Achievement data or unlock progress could not be fetched right now."
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    refetchAchievements();
+                    refetchPlayers();
+                    unlockQueries.forEach((query) => query.refetch());
+                  }}
+                >
+                  Try again
+                </Button>
+              }
+            />
           ) : filteredAchievements.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">No achievements match your search.</div>
+            <EmptyState
+              icon={Award}
+              title={achievements.length === 0 ? "No achievements configured" : "No achievements match your filters"}
+              description={
+                achievements.length === 0
+                  ? "Achievements will appear here once they exist in the system."
+                  : "Try another search, category, or unlock status."
+              }
+            />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {filteredAchievements.map((achievement) => {
@@ -218,9 +246,12 @@ export function AchievementsPage() {
             </div>
           )}
           {!loadingUnlocks && totalUnlocks === 0 && achievements.length > 0 && (
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              No achievements have been unlocked yet. They will appear here after matches are logged.
-            </p>
+            <EmptyState
+              icon={Trophy}
+              title="No achievements unlocked yet"
+              description="They will appear here after matches are logged."
+              className="mt-4 min-h-32"
+            />
           )}
       </CollapsibleSection>
     </div>

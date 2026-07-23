@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Medal, Search, Trophy, Users, X } from "lucide-react";
+import { ChevronDown, Medal, PlusCircle, Search, Trophy, Users, X } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export function LeaderboardPage() {
   const [controlsOpen, setControlsOpen] = useState(() => readStoredBoolean(CONTROLS_OPEN_KEY, false));
   const [rankingsOpen, setRankingsOpen] = useState(() => readStoredBoolean(RANKINGS_OPEN_KEY, true));
 
-  const { data: leaderboardData = [], isPending, isError } = useQuery({
+  const { data: leaderboardData = [], isPending, isError, refetch } = useQuery({
     queryKey: ["leaderboard"],
     queryFn: () => api.get<LeaderboardEntry[]>("/leaderboard").then((r) => r.data),
   });
@@ -179,12 +180,32 @@ export function LeaderboardPage() {
               ))}
             </div>
           ) : isError ? (
-            <div className="py-12 text-center text-sm text-destructive">Could not load the leaderboard.</div>
+            <ErrorState
+              title="Could not load the leaderboard"
+              description="The rankings could not be fetched right now."
+              action={<Button type="button" variant="outline" onClick={() => refetch()}>Try again</Button>}
+            />
           ) : leaderboard.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">No ranked players yet. Log a match to start the table.</div>
+            <EmptyState
+              icon={Trophy}
+              title="No ranked players yet"
+              description="Log a match to start building the table."
+              action={
+                <Button asChild>
+                  <Link to="/matches/new">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Log match
+                  </Link>
+                </Button>
+              }
+            />
           ) : visibleLeaderboard.length === 0 ? (
             <>
-              <div className="py-12 text-center text-sm text-muted-foreground">No players match your search.</div>
+              <EmptyState
+                icon={Search}
+                title="No players match your controls"
+                description="Try a different search or reset the sort."
+              />
               <Button type="button" variant="outline" className="w-full" onClick={resetControls}>
                 Clear controls
               </Button>

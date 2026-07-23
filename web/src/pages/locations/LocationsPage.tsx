@@ -8,6 +8,7 @@ import { ChevronDown, Crown, Percent, PlusCircle, Pencil, Trash2, MapPin, Loader
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -67,7 +68,7 @@ export function LocationsPage() {
   const [statsOpen, setStatsOpen] = useState(() => readStoredBoolean(STATS_OPEN_KEY, false));
   const [listOpen, setListOpen] = useState(() => readStoredBoolean(LIST_OPEN_KEY, true));
 
-  const { data: locations, isPending } = useQuery({
+  const { data: locations, isPending, isError: locationsError, refetch: refetchLocations } = useQuery({
     queryKey: ["locations"],
     queryFn: () => api.get<Location[]>("/locations").then((r) => r.data),
   });
@@ -77,7 +78,7 @@ export function LocationsPage() {
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
 
-  const { data: matchPage, isPending: loadingMatches } = useQuery({
+  const { data: matchPage, isPending: loadingMatches, isError: matchesError, refetch: refetchMatches } = useQuery({
     queryKey: ["matches", "location-stats"],
     queryFn: () => api.get<PageResponse<Match>>("/matches?size=500&sort=playedAt,desc").then((r) => r.data),
   });
@@ -297,10 +298,30 @@ export function LocationsPage() {
             <div className="grid gap-3 lg:grid-cols-2">
               {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-lg" />)}
             </div>
+          ) : locationsError || matchesError ? (
+            <ErrorState
+              title="Could not load location stats"
+              description="Location stats depend on locations and match history."
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    refetchLocations();
+                    refetchMatches();
+                  }}
+                >
+                  Try again
+                </Button>
+              }
+            />
           ) : visibleLocationStats.every((location) => location.matches === 0) ? (
-            <div className="flex min-h-32 items-center justify-center rounded-lg bg-muted/50 px-4 text-center text-sm text-muted-foreground">
-              {activeControlCount > 0 ? "No matching location stats yet." : "No location stats yet. Log matches with locations to fill this in."}
-            </div>
+            <EmptyState
+              icon={Trophy}
+              title={activeControlCount > 0 ? "No matching location stats yet" : "No location stats yet"}
+              description={activeControlCount > 0 ? "Try clearing a control to see more locations." : "Log matches with locations to fill this in."}
+              className="min-h-32"
+            />
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {visibleLocationStats
@@ -342,14 +363,21 @@ export function LocationsPage() {
                 <Skeleton key={i} className="h-24 rounded-lg" />
               ))}
             </div>
+          ) : locationsError ? (
+            <ErrorState
+              title="Could not load locations"
+              description="The location list could not be fetched from the server."
+              action={<Button type="button" variant="outline" onClick={() => refetchLocations()}>Try again</Button>}
+            />
           ) : locations?.length === 0 ? (
             <EmptyLocations onCreate={() => setCreateOpen(true)} />
           ) : visibleLocations.length === 0 ? (
             <div className="space-y-3">
-              <div className="text-center py-12 text-muted-foreground">
-                <MapPin className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">No locations match these controls.</p>
-              </div>
+              <EmptyState
+                icon={MapPin}
+                title="No locations match these controls"
+                description="Try another search or owner filter."
+              />
               <Button type="button" variant="outline" className="w-full" onClick={resetControls}>
                 Clear controls
               </Button>
@@ -435,15 +463,17 @@ function SummaryCard({
 
 function EmptyLocations({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="text-center py-16 text-muted-foreground">
-      <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
-      <p className="font-medium">No locations yet</p>
-      <p className="text-sm mt-1">Add a place before logging matches there.</p>
-      <Button className="mt-4" onClick={onCreate}>
-        <PlusCircle className="mr-2 h-4 w-4" />
-        Add location
-      </Button>
-    </div>
+    <EmptyState
+      icon={MapPin}
+      title="No locations yet"
+      description="Add a place before logging matches there."
+      action={
+        <Button onClick={onCreate}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Add location
+        </Button>
+      }
+    />
   );
 }
 

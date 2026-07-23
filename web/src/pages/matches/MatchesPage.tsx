@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,7 +82,7 @@ export function MatchesPage() {
   const [chartsOpen, setChartsOpen] = useState(() => readStoredBoolean(CHARTS_OPEN_KEY, false));
   const [historyOpen, setHistoryOpen] = useState(() => readStoredBoolean(HISTORY_OPEN_KEY, true));
 
-  const { data: matchPage, isPending: loadingMatches } = useQuery({
+  const { data: matchPage, isPending: loadingMatches, isError: matchesError, refetch: refetchMatches } = useQuery({
     queryKey: ["matches", "history", matchLimit],
     queryFn: () =>
       api
@@ -333,6 +334,12 @@ export function MatchesPage() {
                 <Skeleton key={index} className="h-64 rounded-lg" />
               ))}
             </div>
+          ) : matchesError ? (
+            <ErrorState
+              title="Could not load charts"
+              description="Charts depend on match history, which is unavailable right now."
+              action={<Button type="button" variant="outline" onClick={() => refetchMatches()}>Try again</Button>}
+            />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
               <HorizontalBarChart title="Wins by player" rows={chartData.winsByPlayer} emptyText="No wins match these filters." />
@@ -373,12 +380,29 @@ export function MatchesPage() {
             Array.from({ length: 6 }).map((_, index) => (
               <Skeleton key={index} className="h-28 rounded-lg" />
             ))
+          ) : matchesError ? (
+            <ErrorState
+              title="Could not load match history"
+              description="The match list could not be fetched from the server."
+              action={<Button type="button" variant="outline" onClick={() => refetchMatches()}>Try again</Button>}
+            />
           ) : filteredMatches.length === 0 ? (
             <>
-              <div className="text-center py-12 text-muted-foreground">
-                <Swords className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">No loaded matches match these filters.</p>
-              </div>
+              <EmptyState
+                icon={Swords}
+                title={activeFilterCount > 0 ? "No matches match these filters" : "No matches logged yet"}
+                description={activeFilterCount > 0 ? "Try clearing a filter or loading more history." : "Log the first match to start the history."}
+                action={
+                  activeFilterCount === 0 ? (
+                    <Button asChild>
+                      <Link to="/matches/new">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Log match
+                      </Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
               {activeFilterCount > 0 && (
                 <Button
                   type="button"

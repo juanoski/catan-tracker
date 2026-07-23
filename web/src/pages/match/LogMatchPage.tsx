@@ -9,6 +9,7 @@ import { Loader2, PlusCircle, Trash2, Crown } from "lucide-react";
 import { format } from "date-fns";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common/AppState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -183,17 +184,17 @@ export function LogMatchPage() {
   const { matchId } = useParams();
   const isEditing = Boolean(matchId);
 
-  const { data: locations } = useQuery({
+  const { data: locations, isPending: loadingLocations, isError: locationsError, refetch: refetchLocations } = useQuery({
     queryKey: ["locations"],
     queryFn: () => api.get<Location[]>("/locations").then((r) => r.data),
   });
 
-  const { data: expansions } = useQuery({
+  const { data: expansions, isPending: loadingExpansions, isError: expansionsError, refetch: refetchExpansions } = useQuery({
     queryKey: ["expansions"],
     queryFn: () => api.get<Expansion[]>("/expansions").then((r) => r.data),
   });
 
-  const { data: players } = useQuery({
+  const { data: players, isPending: loadingPlayers, isError: playersQueryError, refetch: refetchPlayers } = useQuery({
     queryKey: ["players"],
     queryFn: () => api.get<Player[]>("/players").then((r) => r.data),
   });
@@ -203,7 +204,7 @@ export function LogMatchPage() {
     queryFn: () => api.get<PageResponse<Match>>("/matches?size=10&sort=playedAt,desc").then((r) => r.data),
   });
 
-  const { data: editingMatch } = useQuery({
+  const { data: editingMatch, isPending: loadingEditingMatch, isError: editingMatchError, refetch: refetchEditingMatch } = useQuery({
     queryKey: ["matches", matchId],
     queryFn: () => api.get<Match>(`/matches/${matchId}`).then((r) => r.data),
     enabled: isEditing,
@@ -293,6 +294,8 @@ export function LogMatchPage() {
   const selectedPlayerIds = watchedPlayers.map((player) => player.playerId).filter(Boolean);
   const recentPlayers = getRecentPlayers(recentMatchPage?.content ?? [], players ?? []);
   const playersError = getPlayersError(form.formState.errors.players);
+  const setupLoading = loadingLocations || loadingExpansions || loadingPlayers || (isEditing && loadingEditingMatch);
+  const setupError = locationsError || expansionsError || playersQueryError || editingMatchError;
 
   function addPlayer(playerId: string, preferredColor?: string) {
     if (selectedPlayerIds.includes(playerId)) {
@@ -317,6 +320,56 @@ export function LogMatchPage() {
       longestRoad: false,
       largestArmy: false,
     });
+  }
+
+  if (setupLoading) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <LoadingState title={isEditing ? "Loading match" : "Preparing match form"} description="Fetching players, locations, and expansions." />
+      </div>
+    );
+  }
+
+  if (setupError) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <ErrorState
+          title={isEditing ? "Could not load match form" : "Could not prepare match form"}
+          description="Players, locations, expansions, or the match being edited could not be fetched."
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                refetchLocations();
+                refetchExpansions();
+                refetchPlayers();
+                if (isEditing) refetchEditingMatch();
+              }}
+            >
+              Try again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!players?.length || !locations?.length || !expansions?.length) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <EmptyState
+          icon={PlusCircle}
+          title="Match setup is incomplete"
+          description="You need at least two players, one location, and one expansion before logging a match."
+          action={
+            <Button variant="outline" onClick={handleCancel}>
+              Go back
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   return (

@@ -9,6 +9,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState, ErrorState } from "@/components/common/AppState";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Match } from "@/types/api";
@@ -36,7 +37,7 @@ export function MatchDetailPage() {
   const [playersOpen, setPlayersOpen] = useState(() => readStoredBoolean(PLAYERS_OPEN_KEY, true));
   const [notesOpen, setNotesOpen] = useState(() => readStoredBoolean(NOTES_OPEN_KEY, true));
 
-  const { data: match, isPending } = useQuery({
+  const { data: match, isPending, isError, refetch } = useQuery({
     queryKey: ["matches", matchId],
     queryFn: () => api.get<Match>(`/matches/${matchId}`).then((r) => r.data),
     enabled: Boolean(matchId),
@@ -89,14 +90,28 @@ export function MatchDetailPage() {
     );
   }
 
+  if (isError) {
+    return (
+      <ErrorState
+        title="Could not load match"
+        description="The match detail could not be fetched from the server."
+        action={<Button type="button" variant="outline" onClick={() => refetch()}>Try again</Button>}
+      />
+    );
+  }
+
   if (!match) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Trophy className="mx-auto mb-2 h-8 w-8 opacity-40" />
-          <p className="text-sm">Match not found.</p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Trophy}
+        title="Match not found"
+        description="This match may have been deleted or the link may be outdated."
+        action={
+          <Button asChild variant="outline">
+            <Link to="/matches">Open match history</Link>
+          </Button>
+        }
+      />
     );
   }
 
