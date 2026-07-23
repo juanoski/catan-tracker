@@ -1,18 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Crown, Percent, PlusCircle, Pencil, Trash2, MapPin, Loader2, Swords, Trophy } from "lucide-react";
+import { ChevronDown, Crown, Percent, PlusCircle, Pencil, Trash2, MapPin, Loader2, Search, Swords, Trophy, X } from "lucide-react";
 import api from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -45,11 +46,26 @@ type LocationStats = {
   topWinner?: { playerId: string; playerName: string; wins: number };
   bestWinRate?: { playerId: string; playerName: string; wins: number; matches: number; winRate: number };
 };
+type OwnerFilter = "all" | "mine";
+type LocationSort = "matches" | "name";
+type ActiveControlChip = { key: "search" | "owner" | "sort"; label: string; value: string };
+
+const DEFAULT_OWNER_FILTER: OwnerFilter = "all";
+const DEFAULT_LOCATION_SORT: LocationSort = "matches";
+const CONTROLS_OPEN_KEY = "catan.locations.controlsOpen";
+const STATS_OPEN_KEY = "catan.locations.statsOpen";
+const LIST_OPEN_KEY = "catan.locations.listOpen";
 
 export function LocationsPage() {
   const { user } = useAuth();
   const [editTarget, setEditTarget] = useState<Location | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(DEFAULT_OWNER_FILTER);
+  const [sortKey, setSortKey] = useState<LocationSort>(DEFAULT_LOCATION_SORT);
+  const [controlsOpen, setControlsOpen] = useState(() => readStoredBoolean(CONTROLS_OPEN_KEY, false));
+  const [statsOpen, setStatsOpen] = useState(() => readStoredBoolean(STATS_OPEN_KEY, false));
+  const [listOpen, setListOpen] = useState(() => readStoredBoolean(LIST_OPEN_KEY, true));
 
   const { data: locations, isPending } = useQuery({
     queryKey: ["locations"],
@@ -70,10 +86,33 @@ export function LocationsPage() {
     () => buildLocationStats(locations ?? [], matchPage?.content ?? []),
     [locations, matchPage?.content]
   );
+  const visibleLocations = useMemo(
+    () => sortLocations(filterLocations(locations ?? [], search, ownerFilter, user?.playerId), sortKey, locationStats),
+    [locations, search, ownerFilter, user?.playerId, sortKey, locationStats]
+  );
+  const visibleLocationIds = useMemo(() => new Set(visibleLocations.map((location) => location.id)), [visibleLocations]);
+  const visibleLocationStats = useMemo(
+    () => sortLocationStats(locationStats.filter((location) => visibleLocationIds.has(location.locationId)), sortKey),
+    [locationStats, visibleLocationIds, sortKey]
+  );
+  const activeControlChips = useMemo(() => buildActiveControlChips(search, ownerFilter, sortKey), [search, ownerFilter, sortKey]);
+  const activeControlCount = activeControlChips.length;
   const busiestLocation = locationStats[0];
   const bestWinRate = [...locationStats]
     .flatMap((location) => location.bestWinRate ? [{ ...location.bestWinRate, locationName: location.locationName }] : [])
     .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins || a.playerName.localeCompare(b.playerName))[0];
+
+  useEffect(() => {
+    writeStoredBoolean(CONTROLS_OPEN_KEY, controlsOpen);
+  }, [controlsOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(STATS_OPEN_KEY, statsOpen);
+  }, [statsOpen]);
+
+  useEffect(() => {
+    writeStoredBoolean(LIST_OPEN_KEY, listOpen);
+  }, [listOpen]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/locations/${id}`),
@@ -94,6 +133,18 @@ export function LocationsPage() {
     }
   }
 
+  function resetControls() {
+    setSearch("");
+    setOwnerFilter(DEFAULT_OWNER_FILTER);
+    setSortKey(DEFAULT_LOCATION_SORT);
+  }
+
+  function clearControl(key: ActiveControlChip["key"]) {
+    if (key === "search") setSearch("");
+    if (key === "owner") setOwnerFilter(DEFAULT_OWNER_FILTER);
+    if (key === "sort") setSortKey(DEFAULT_LOCATION_SORT);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -109,7 +160,7 @@ export function LocationsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-3">
         <SummaryCard
           icon={Swords}
           title="Tracked games"
@@ -130,28 +181,129 @@ export function LocationsPage() {
           value={bestWinRate?.playerName ?? "-"}
           subtitle={bestWinRate ? `${Math.round(bestWinRate.winRate)}% at ${bestWinRate.locationName}` : "No wins yet"}
           loading={loadingMatches || isPending}
+          className="col-span-2 xl:col-span-1"
         />
       </div>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Trophy className="h-4 w-4 text-accent" />
-            Location stats
-          </CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => setControlsOpen((open) => !open)}
+              className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+              aria-expanded={controlsOpen}
+            >
+              <span className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-accent" />
+                <span className="text-base font-semibold leading-none tracking-tight">Controls</span>
+                {activeControlCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {activeControlCount} active
+                  </Badge>
+                )}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+                  controlsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            <Button variant="outline" size="sm" onClick={resetControls} disabled={activeControlCount === 0}>
+              Reset controls
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent>
+        {activeControlChips.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-6 pb-4">
+            {activeControlChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => clearControl(chip.key)}
+                className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={`Clear ${chip.label}`}
+              >
+                <span className="truncate">
+                  {chip.label}: {chip.value}
+                </span>
+                <X className="h-3 w-3 shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+        <CardContent className={controlsOpen ? "block" : "hidden sm:block"}>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem_11rem]">
+            <div className="space-y-2">
+              <Label>Search</Label>
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Find a location or owner"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Owner</Label>
+              <Select value={ownerFilter} onValueChange={(value) => setOwnerFilter(value as OwnerFilter)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All owners</SelectItem>
+                  <SelectItem value="mine">My locations</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Sort</Label>
+              <Select value={sortKey} onValueChange={(value) => setSortKey(value as LocationSort)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="matches">Most matches</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <button
+            type="button"
+            onClick={() => setStatsOpen((open) => !open)}
+            className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+            aria-expanded={statsOpen}
+          >
+            <span className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-accent" />
+              <span className="text-base font-semibold leading-none tracking-tight">Location stats</span>
+              <Badge variant="secondary" className="shrink-0 text-xs">
+                {visibleLocationStats.filter((location) => location.matches > 0).length} shown
+              </Badge>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+                statsOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </CardHeader>
+        <CardContent className={statsOpen ? "block" : "hidden sm:block"}>
           {loadingMatches || isPending ? (
             <div className="grid gap-3 lg:grid-cols-2">
               {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-lg" />)}
             </div>
-          ) : locationStats.every((location) => location.matches === 0) ? (
+          ) : visibleLocationStats.every((location) => location.matches === 0) ? (
             <div className="flex min-h-32 items-center justify-center rounded-lg bg-muted/50 px-4 text-center text-sm text-muted-foreground">
-              No location stats yet. Log matches with locations to fill this in.
+              {activeControlCount > 0 ? "No matching location stats yet." : "No location stats yet. Log matches with locations to fill this in."}
             </div>
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
-              {locationStats
+              {visibleLocationStats
                 .filter((location) => location.matches > 0)
                 .map((stats) => (
                   <LocationStatsCard key={stats.locationId} stats={stats} />
@@ -161,79 +313,68 @@ export function LocationsPage() {
         </CardContent>
       </Card>
 
-      {isPending ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-lg" />
-          ))}
-        </div>
-      ) : locations?.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No locations yet</p>
-          <p className="text-sm mt-1">Add a place before logging matches there.</p>
-          <Button className="mt-4" onClick={() => setCreateOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add location
-          </Button>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {locations?.map((location) => {
-            const isOwner = location.ownerId === user?.playerId;
-            return (
-              <Card key={location.id} className="group">
-                <CardContent className="p-4 flex flex-col gap-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-accent shrink-0" />
-                        <p className="font-semibold truncate">{location.name}</p>
-                      </div>
-                      {location.address && (
-                        <p className="text-sm text-muted-foreground truncate pl-6">
-                          {location.address}
-                        </p>
-                      )}
-                    </div>
-                    {isOwner && (
-                      <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleEdit(location)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteConfirm(location)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      Added by {location.ownerName}
-                    </span>
-                    {isOwner && (
-                      <Badge variant="outline" className="text-xs">
-                        yours
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      <Card>
+        <CardHeader className="pb-3">
+          <button
+            type="button"
+            onClick={() => setListOpen((open) => !open)}
+            className="flex min-h-10 items-center justify-between gap-3 rounded-md text-left sm:pointer-events-none sm:min-h-0"
+            aria-expanded={listOpen}
+          >
+            <span className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-accent" />
+              <span className="text-base font-semibold leading-none tracking-tight">Location list</span>
+              <Badge variant="secondary" className="shrink-0 text-xs">
+                {visibleLocations.length} shown
+              </Badge>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${
+                listOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </CardHeader>
+        <CardContent className={listOpen ? "block" : "hidden sm:block"}>
+          {isPending ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 rounded-lg" />
+              ))}
+            </div>
+          ) : locations?.length === 0 ? (
+            <EmptyLocations onCreate={() => setCreateOpen(true)} />
+          ) : visibleLocations.length === 0 ? (
+            <div className="space-y-3">
+              <div className="text-center py-12 text-muted-foreground">
+                <MapPin className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No locations match these controls.</p>
+              </div>
+              <Button type="button" variant="outline" className="w-full" onClick={resetControls}>
+                Clear controls
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleLocations.map((location) => {
+                const isOwner = location.ownerId === user?.playerId;
+                const stats = locationStats.find((row) => row.locationId === location.id);
+                return (
+                  <LocationCard
+                    key={location.id}
+                    location={location}
+                    stats={stats}
+                    isOwner={isOwner}
+                    onEdit={() => handleEdit(location)}
+                    onDelete={() => handleDeleteConfirm(location)}
+                    deleting={deleteMutation.isPending}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <LocationDialog
         open={createOpen}
@@ -263,30 +404,128 @@ function SummaryCard({
   value,
   subtitle,
   loading,
+  className,
 }: {
   icon: typeof Swords;
   title: string;
   value: string | number;
   subtitle: string;
   loading: boolean;
+  className?: string;
 }) {
-  if (loading) return <Skeleton className="h-24 rounded-xl" />;
+  if (loading) return <Skeleton className={`h-24 rounded-xl ${className ?? ""}`} />;
 
   return (
-    <Card>
-      <CardContent className="p-4">
+    <Card className={className}>
+      <CardContent className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-1 truncate text-2xl font-semibold">{value}</p>
-            <p className="mt-1 truncate text-xs text-muted-foreground">{subtitle}</p>
+            <p className="text-xs text-muted-foreground sm:text-sm">{title}</p>
+            <p className="mt-1 truncate text-lg font-semibold sm:text-2xl" title={String(value)}>{value}</p>
+            <p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground sm:mt-1 sm:text-xs">{subtitle}</p>
           </div>
-          <div className="rounded-md bg-accent/15 p-2 text-accent">
-            <Icon className="h-4 w-4" />
+          <div className="shrink-0 rounded-md bg-accent/15 p-1.5 text-accent sm:p-2">
+            <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function EmptyLocations({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="text-center py-16 text-muted-foreground">
+      <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
+      <p className="font-medium">No locations yet</p>
+      <p className="text-sm mt-1">Add a place before logging matches there.</p>
+      <Button className="mt-4" onClick={onCreate}>
+        <PlusCircle className="mr-2 h-4 w-4" />
+        Add location
+      </Button>
+    </div>
+  );
+}
+
+function LocationCard({
+  location,
+  stats,
+  isOwner,
+  onEdit,
+  onDelete,
+  deleting,
+}: {
+  location: Location;
+  stats?: LocationStats;
+  isOwner: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  return (
+    <Card className="group">
+      <CardContent className="p-4 flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-accent shrink-0" />
+              <p className="font-semibold truncate">{location.name}</p>
+            </div>
+            {location.address && (
+              <p className="text-sm text-muted-foreground truncate pl-6">
+                {location.address}
+              </p>
+            )}
+          </div>
+          {isOwner && (
+            <div className="flex gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onEdit}
+                aria-label={`Edit ${location.name}`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={onDelete}
+                disabled={deleting}
+                aria-label={`Delete ${location.name}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <MiniStat label="Matches" value={stats?.matches ?? 0} />
+          <MiniStat label="Top winner" value={stats?.topWinner?.playerName ?? "-"} />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-xs text-muted-foreground">
+            Added by {location.ownerName}
+          </span>
+          {isOwner && (
+            <Badge variant="outline" className="text-xs">
+              yours
+            </Badge>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md bg-muted/60 px-2 py-2">
+      <p className="truncate font-semibold" title={String(value)}>{value}</p>
+      <p className="mt-0.5 text-muted-foreground">{label}</p>
+    </div>
   );
 }
 
@@ -407,6 +646,54 @@ function buildLocationStats(locations: Location[], matches: Match[]): LocationSt
       };
     })
     .sort((a, b) => b.matches - a.matches || a.locationName.localeCompare(b.locationName));
+}
+
+function readStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback;
+  const value = window.localStorage.getItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function writeStoredBoolean(key: string, value: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(value));
+}
+
+function filterLocations(locations: Location[], search: string, ownerFilter: OwnerFilter, currentUserId?: string) {
+  const normalizedSearch = search.trim().toLowerCase();
+  return locations.filter((location) => {
+    if (ownerFilter === "mine" && location.ownerId !== currentUserId) return false;
+    if (!normalizedSearch) return true;
+    return [location.name, location.address ?? "", location.ownerName]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch);
+  });
+}
+
+function sortLocations(locations: Location[], sortKey: LocationSort, stats: LocationStats[]) {
+  const matchesByLocation = new Map(stats.map((location) => [location.locationId, location.matches]));
+  return [...locations].sort((a, b) => {
+    if (sortKey === "name") return a.name.localeCompare(b.name);
+    return (matchesByLocation.get(b.id) ?? 0) - (matchesByLocation.get(a.id) ?? 0) || a.name.localeCompare(b.name);
+  });
+}
+
+function sortLocationStats(stats: LocationStats[], sortKey: LocationSort) {
+  return [...stats].sort((a, b) => {
+    if (sortKey === "name") return a.locationName.localeCompare(b.locationName);
+    return b.matches - a.matches || a.locationName.localeCompare(b.locationName);
+  });
+}
+
+function buildActiveControlChips(search: string, ownerFilter: OwnerFilter, sortKey: LocationSort): ActiveControlChip[] {
+  const chips: ActiveControlChip[] = [];
+  if (search.trim()) chips.push({ key: "search", label: "Search", value: search.trim() });
+  if (ownerFilter !== DEFAULT_OWNER_FILTER) chips.push({ key: "owner", label: "Owner", value: "My locations" });
+  if (sortKey !== DEFAULT_LOCATION_SORT) chips.push({ key: "sort", label: "Sort", value: "Name" });
+  return chips;
 }
 
 function LocationDialog({
