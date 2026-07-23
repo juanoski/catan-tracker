@@ -95,11 +95,13 @@ export function Navbar() {
       {/* Mobile menu */}
       <div
         className={cn(
-          "md:hidden border-t border-primary/30 overflow-hidden transition-all duration-200",
-          menuOpen ? "max-h-96" : "max-h-0"
+          "md:hidden border-t border-primary/30 transition-all duration-200",
+          menuOpen
+            ? "max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+            : "max-h-0 overflow-hidden"
         )}
       >
-        <div className="container mx-auto flex flex-col px-4 py-3 gap-1">
+        <div className="container mx-auto flex flex-col gap-1 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           {navItems.map((item) => (
             <Link
               key={item.to}
