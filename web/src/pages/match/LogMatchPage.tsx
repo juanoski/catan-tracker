@@ -278,6 +278,17 @@ export function LogMatchPage() {
     }
   }
 
+  function handleCancel() {
+    const historyIndex = window.history.state?.idx;
+
+    if (typeof historyIndex === "number" && historyIndex > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(isEditing && matchId ? `/matches/${matchId}` : "/matches", { replace: true });
+  }
+
   const watchedPlayers = form.watch("players");
   const selectedPlayerIds = watchedPlayers.map((player) => player.playerId).filter(Boolean);
   const recentPlayers = getRecentPlayers(recentMatchPage?.content ?? [], players ?? []);
@@ -318,7 +329,7 @@ export function LogMatchPage() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
+        <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-6 pb-20 md:pb-0">
           {/* Match Info */}
           <Card>
             <CardHeader className="pb-3">
@@ -513,15 +524,22 @@ export function LogMatchPage() {
             </CardContent>
           </Card>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={mutation.isPending}
-          >
+          <Button type="submit" className="hidden w-full md:inline-flex" size="lg" disabled={mutation.isPending}>
             {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEditing ? "Save changes and recalculate ELO" : "Save match and update ELO"}
           </Button>
+
+          <div className="fixed inset-x-0 bottom-[4.35rem] z-30 border-t bg-background/95 px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+            <div className="mx-auto grid max-w-2xl grid-cols-[0.8fr_1.2fr] gap-2">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={mutation.isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEditing ? "Save changes" : "Save match"}
+              </Button>
+            </div>
+          </div>
         </form>
       </Form>
     </div>
@@ -573,7 +591,7 @@ function PlayerRow({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Player select */}
         <FormField
           control={form.control}
@@ -637,13 +655,13 @@ function PlayerRow({
         />
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="grid gap-3 sm:grid-cols-[minmax(80px,0.6fr)_1fr]">
         {/* Points */}
         <FormField
           control={form.control}
           name={`players.${index}.points`}
           render={({ field }) => (
-            <FormItem className="flex-1 min-w-[80px]">
+            <FormItem>
               <FormLabel className="text-xs">Points</FormLabel>
               <FormControl>
                 <Input type="number" min={0} max={20} step={1} className="h-9 text-sm" {...field} />
@@ -654,11 +672,11 @@ function PlayerRow({
         />
 
         {/* Checkboxes */}
-        <div className="flex items-center gap-4 pt-5 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 sm:pt-5">
           <button
             type="button"
             onClick={onSetWinner}
-            className={`flex items-center gap-1.5 text-sm rounded-md px-2 py-1 transition-colors ${
+            className={`flex min-h-9 items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors ${
               isWinner
                 ? "bg-accent text-accent-foreground font-medium"
                 : "hover:bg-muted text-muted-foreground"
@@ -672,7 +690,7 @@ function PlayerRow({
             control={form.control}
             name={`players.${index}.longestRoad`}
             render={({ field }) => (
-              <FormItem className="flex items-center gap-1.5 space-y-0">
+              <FormItem className="flex min-h-9 items-center gap-1.5 space-y-0">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
@@ -688,7 +706,7 @@ function PlayerRow({
             control={form.control}
             name={`players.${index}.largestArmy`}
             render={({ field }) => (
-              <FormItem className="flex items-center gap-1.5 space-y-0">
+              <FormItem className="flex min-h-9 items-center gap-1.5 space-y-0">
                 <FormControl>
                   <Checkbox
                     checked={field.value}
